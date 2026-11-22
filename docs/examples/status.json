@@ -1,0 +1,4 @@
+{
+  "station_id": "BC-L01",
+  "device_status": { "state": "degraded", "firmware": "0.1.0", "faults": ["exposed chamber pump: flow below setpoint"] }
+}

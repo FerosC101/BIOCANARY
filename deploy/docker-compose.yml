@@ -1,0 +1,15 @@
+# Runs on the ECS instance. RDS, DCS, OBS and ModelArts are external and configured in deploy/.env
+services:
+  api:
+    build: { context: .., dockerfile: backend/Dockerfile }
+    env_file: .env
+    restart: unless-stopped
+    expose: ["8000"]
+    volumes: ["api-var:/srv/backend/var"]
+  web:
+    build: { context: .., dockerfile: frontend/Dockerfile }
+    restart: unless-stopped
+    depends_on: [api]
+    ports: ["80:80"] # place an ELB or a TLS terminator in front
+volumes:
+  api-var:

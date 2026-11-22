@@ -1,0 +1,18 @@
+{
+  "readings": [
+    {
+      "schema_version": "1.0", "station_id": "BC-L01", "recorded_at": "2026-11-23T01:00:00Z", "sequence": 1040, "partial": true,
+      "measurements": [
+        { "sensor_id": "REF-ACT", "value": 41.5, "unit": "a.u." },
+        { "sensor_id": "EXP-ACT", "value": 40.9, "unit": "a.u." }
+      ]
+    },
+    {
+      "schema_version": "1.0", "station_id": "BC-L01", "recorded_at": "2026-11-23T01:10:00Z", "sequence": 1041, "partial": true,
+      "measurements": [
+        { "sensor_id": "REF-ACT", "value": 41.7, "unit": "a.u." },
+        { "sensor_id": "EXP-ACT", "value": 40.4, "unit": "a.u." }
+      ]
+    }
+  ]
+}

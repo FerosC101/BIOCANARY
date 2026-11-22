@@ -1,0 +1,39 @@
+[project]
+name = "biocanary-backend"
+version = "0.1.0"
+description = "BIOCANARY biological wastewater monitoring API"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14",
+  "psycopg[binary]>=3.2",
+  "pydantic-settings>=2.6",
+  "numpy>=2.0",
+  "pandas>=2.2,<3",
+  "scipy>=1.14",
+  "argon2-cffi>=23.1",
+  "pyjwt>=2.10",
+  "redis>=5.2",
+  "httpx>=0.28",
+  "reportlab>=4.2",
+]
+
+[project.optional-dependencies]
+huawei = ["esdk-obs-python>=3.24"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "fakeredis>=2.26", "scikit-learn>=1.6", "ruff>=0.8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"

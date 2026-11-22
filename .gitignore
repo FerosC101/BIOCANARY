@@ -1,0 +1,13 @@
+.DS_Store
+.env
+node_modules/
+frontend/dist/
+backend/.venv/
+backend/var/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+ml/data/
+*.log
+*.blend1
+device3d/**/node_modules/

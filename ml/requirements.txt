@@ -1,0 +1,5 @@
+mindspore>=2.6
+numpy
+pandas<3
+scipy
+scikit-learn

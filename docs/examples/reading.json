@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "station_id": "BC-L01",
+  "recorded_at": "2026-11-23T01:20:00Z",
+  "sequence": 1042,
+  "partial": false,
+  "device_status": { "state": "ok", "firmware": "0.1.0", "faults": [] },
+  "measurements": [
+    { "sensor_id": "REF-ACT", "value": 41.8, "unit": "a.u.", "location": "reference", "status": "ok" },
+    { "sensor_id": "REF-DO", "value": 5.81, "unit": "mg/L", "location": "reference", "status": "ok" },
+    { "sensor_id": "REF-TEMP", "value": 24.9, "unit": "°C", "location": "reference", "status": "ok" },
+    { "sensor_id": "EXP-ACT", "value": 40.6, "unit": "a.u.", "location": "exposed", "status": "ok" },
+    { "sensor_id": "EXP-DO", "value": 5.88, "unit": "mg/L", "location": "exposed", "status": "ok" },
+    { "sensor_id": "EXP-TEMP", "value": 25.0, "unit": "°C", "location": "exposed", "status": "ok" },
+    { "sensor_id": "ENV-PH", "value": 7.21, "unit": "pH", "location": "environment", "status": "ok" },
+    { "sensor_id": "ENV-TEMP", "value": -127.0, "unit": "°C", "location": "environment", "status": "ok" },
+    { "sensor_id": "ENV-DO", "value": null, "unit": "mg/L", "location": "environment", "status": "missing" }
+  ]
+}
