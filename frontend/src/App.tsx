@@ -62,7 +62,7 @@ export function App() {
 function Splash({ children }: { children?: React.ReactNode }) {
   return (
     <main className="splash">
-      <Logo className="splash-logo" />
+      <Logo className="splash-logo" tone="white" />
       {children}
     </main>
   )

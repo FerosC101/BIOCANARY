@@ -1,23 +1,23 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ResponseDisc } from '../brand/ResponseDisc'
+import { Bird } from '../brand/Bird'
 import { AlertList } from '../components/Alerts'
+import { Dial } from '../components/Dial'
+import { RANGE_NAMES, rangeOf, rangeText, severityWord } from '../lib/ranges'
 import { LineChart } from '../components/LineChart'
-import { Empty, Failed, Loading, Section, StatusIcon } from '../components/ui'
+import { Empty, Failed, Loading, Section } from '../components/ui'
 import { get } from '../lib/api'
 import { useApp, useNow } from '../lib/app'
-import { EXPOSED, REFERENCE, SUPPORT } from '../lib/colors'
-import { ago, confidence, dateTime, digitsFor, num } from '../lib/format'
-import type { Overview } from '../lib/types'
+import { EXPOSED, REFERENCE } from '../lib/colors'
+import { ago, num, time } from '../lib/format'
+import type { Assessment, Overview, Station } from '../lib/types'
 
 const SPANS = [
-  [24, '24 hours'],
-  [72, '3 days'],
-  [168, '7 days'],
+  [24, '24 h'],
+  [72, '3 d'],
+  [168, '7 d'],
 ] as const
-const SUPPORTING = ['dissolved_oxygen', 'ph', 'temperature']
 
 export function Dashboard() {
   const { station } = useApp()
@@ -29,14 +29,14 @@ export function Dashboard() {
   })
   if (q.isError && !q.data) return <Failed error={q.error} retry={() => q.refetch()} />
   if (!q.data) return <Loading rows={4} />
-  const { assessment, series, alerts, sensors } = q.data
+  const { assessment: a, series, alerts } = q.data
   return (
     <div className={'page' + (q.isPlaceholderData ? ' stale' : '')}>
-      <Hero data={q.data} />
-      <div className="grid-main">
+      <Lead data={q.data} />
+      <div className="dash-grid">
         <Section
           title="Biological activity"
-          note={`Reference and wastewater-exposed chambers, ${series.activity_unit || 'activity'}`}
+          note={`Reference and test chambers, ${series.activity_unit || 'activity'}. The shaded gap is the inhibition.`}
           actions={
             <div className="segmented" role="group" aria-label="Chart period">
               {SPANS.map(([h, label]) => (
@@ -52,116 +52,129 @@ export function Dashboard() {
               t={series.t}
               series={[
                 { key: 'ref', label: 'Reference', color: REFERENCE, values: series.channels.ref_activity },
-                { key: 'exp', label: 'Exposed', color: EXPOSED, values: series.channels.exp_activity },
+                { key: 'exp', label: 'Test', color: EXPOSED, values: series.channels.exp_activity },
               ]}
               unit={series.activity_unit}
-              height={392}
+              height={300}
               gap
               minSpan={10}
-              marks={assessment?.detail.onset ? [{ at: +new Date(assessment.detail.onset), label: 'Response began to diverge' }] : []}
-              label="Line chart of reference and exposed biological activity over time"
+              marks={a?.detail.onset ? [{ at: +new Date(a.detail.onset), label: 'Response began to diverge' }] : []}
+              label="Line chart of reference and test biological activity over time"
             />
           ) : (
             <Empty title="No measurements yet">The chart fills in as soon as the station sends its first valid reading.</Empty>
           )}
         </Section>
-        <Section title="Recent alerts">
-          {alerts.length ? <AlertList alerts={alerts} /> : <Empty title="No alerts recorded" />}
-        </Section>
-      </div>
-      <Section title="Supporting measurements" note="Wastewater sample line">
-        <div className="supports">
-          {SUPPORTING.map((quantity) => {
-            const s = sensors.find((x) => x.location === 'environment' && x.quantity === quantity)
-            const values = series.channels[`env_${quantity}`]
-            const value = s?.latest && s.connection !== 'missing' && s.connection !== 'invalid' ? s.latest.value : null
-            return (
-              <div key={quantity} className="support">
-                <h3>{{ dissolved_oxygen: 'Dissolved oxygen', ph: 'pH', temperature: 'Temperature' }[quantity]}</h3>
-                <p className="figure">
-                  {num(value, digitsFor(quantity))} {value !== null && quantity !== 'ph' && <small>{s?.unit}</small>}
-                </p>
-                <p className="sub">{!s ? 'No sensor registered' : !s.latest ? 'Never reported' : value === null ? `Last reading ${s.latest.quality}` : s.connection === 'offline' ? `Last known, ${dateTime(s.latest.recorded_at)}` : `Latest reading, ${s.latest.quality}`}</p>
-                {values?.some((v) => v !== null) && (
-                  <LineChart
-                    t={series.t}
-                    series={[{ key: quantity, label: s?.name ?? quantity, color: SUPPORT, values }]}
-                    unit={quantity === 'ph' ? '' : (s?.unit ?? '')}
-                    digits={digitsFor(quantity)}
-                    height={110}
-                    compact
-                    minSpan={quantity === 'ph' ? 0.5 : 1}
-                    label={`${s?.name ?? quantity} over time`}
-                  />
-                )}
-              </div>
-            )
-          })}
+        <div className="dash-side">
+          {a && <AiNote a={a} offline={q.data.station.status === 'offline'} />}
+          <Section title="Alerts" actions={<span className="muted">{alerts.filter((x) => !x.ended_at).length} open</span>}>
+            {alerts.length ? <AlertList alerts={alerts.slice(0, 4)} /> : <Empty title="No alerts recorded" />}
+          </Section>
         </div>
-      </Section>
+      </div>
+      <Fleet />
     </div>
   )
 }
 
-function Hero({ data }: { data: Overview }) {
-  const { station, assessment: a } = data
+function Lead({ data }: { data: Overview }) {
+  const { station, assessment: a, series } = data
   const now = useNow()
   const offline = station.status === 'offline'
   const sig = a?.detail.signals
+  const thresholds = a?.detail.threshold.used ? a.detail.threshold.values : null
+  const value = a?.inhibition ?? null
+  const caption = offline ? 'Station offline · last known' : a ? rangeText(value, thresholds, severityWord(a.severity)) : 'Not assessed yet'
   return (
-    <section className={`hero s-${station.status}`} aria-label="Overall biological status">
-      <div className="hero-text">
-        <p className="hero-status">
-          <StatusIcon status={station.status} size={22} />
-          {station.status_label}
-        </p>
+    <section className="lead" aria-label="Station that is selected">
+      <div className="lead-text">
+        <span className="lead-station">
+          {station.name} · {station.code}
+        </span>
         <h1>{offline ? (a ? 'Last known biological condition' : 'Waiting for the first reading') : (a?.detail.explanation.headline ?? station.status_reason)}</h1>
-        <p className="hero-summary">
+        <p>
           {offline && <>{station.status_reason} </>}
-          {offline && a && <>At the last reading: </>}
           {a?.detail.explanation.summary}
         </p>
-        {a && (
-          <p className="hero-meta">
-            AI summary from {station.origin === 'simulated' ? 'simulated' : 'measured'} readings.{' '}
-            <Link to="/analysis">
-              View full analysis <ArrowRight size={14} aria-hidden />
-            </Link>
-          </p>
-        )}
+        <dl className="tiles">
+          <div className="ref">
+            <dt>Reference</dt>
+            <dd>
+              {num(sig?.ref_activity)} <small>{sig?.ref_activity != null && series.activity_unit}</small>
+            </dd>
+          </div>
+          <div className="test">
+            <dt>Test</dt>
+            <dd>
+              {num(sig?.exp_activity)} <small>{sig?.exp_activity != null && series.activity_unit}</small>
+            </dd>
+          </div>
+          <div>
+            <dt>{a?.detail.onset ? 'Since' : 'Assessed'}</dt>
+            <dd>{a?.detail.onset ? time(a.detail.onset) : a ? ago(a.assessed_at, now) : '–'}</dd>
+          </div>
+        </dl>
       </div>
-      <ResponseDisc reference={sig?.ref_activity ?? null} exposed={sig?.exp_activity ?? null} unit={data.series.activity_unit} muted={offline} />
-      <dl className="kpis">
-        <div>
-          <dt>Inhibition indicator</dt>
-          <dd>{a?.inhibition == null ? '–' : `${num(a.inhibition)}%`}</dd>
-          <dd className="sub">{a ? (offline ? `Last known: ${a.severity_label.toLowerCase()}` : a.severity_label) : 'Not assessed'}</dd>
-        </div>
-        <div>
-          <dt>Inhibition risk</dt>
-          <dd>{offline ? 'Unknown' : (a?.risk ?? '–')}</dd>
-          <dd className="sub">{offline ? 'No current data' : a ? (a.confidence !== null ? `Confidence ${confidence(a.confidence).toLowerCase()}` : a.risk === 'Not rated' ? 'No validated thresholds' : 'Confidence not available') : ''}</dd>
-        </div>
-        <div>
-          <dt>Reference activity</dt>
-          <dd>
-            {num(sig?.ref_activity)} <small>{sig?.ref_activity != null && data.series.activity_unit}</small>
-          </dd>
-          <dd className="sub">{sig?.reference_shift_pct != null ? `${sig.reference_shift_pct > 0 ? '+' : ''}${num(sig.reference_shift_pct)}% from its baseline` : ''}</dd>
-        </div>
-        <div>
-          <dt>Exposed activity</dt>
-          <dd>
-            {num(sig?.exp_activity)} <small>{sig?.exp_activity != null && data.series.activity_unit}</small>
-          </dd>
-          <dd className="sub">{sig?.ref_activity && sig.exp_activity !== null ? `${Math.round((sig.exp_activity / sig.ref_activity) * 100)}% of reference` : ''}</dd>
-        </div>
-        <div>
-          <dt>Latest analysis</dt>
-          <dd>{a ? ago(a.assessed_at, now) : '–'}</dd>
-          <dd className="sub">{a ? `Data to ${dateTime(a.data_until)}` : ''}</dd>
-        </div>
-      </dl>
+      <Dial value={value} thresholds={thresholds} caption={caption} muted={offline || !a} />
     </section>
+  )
+}
+
+function AiNote({ a, offline }: { a: Assessment; offline: boolean }) {
+  const f = a.detail.factors.find((x) => x.strength !== 'none')
+  const sig = a.detail.signals
+  const quiet = a.severity === 'normal' || a.severity === 'unclassified'
+  const text = f
+    ? `${f.label} moved ${f.lead_minutes ? `${Math.round(f.lead_minutes)} min before` : 'with'} the response${f.rho !== null ? ` (correlation ${num(f.rho, 2)})` : ''}. A correlation, not proof of cause.`
+    : offline
+      ? 'No recent readings, so there is nothing new to compare with the supporting measurements.'
+      : !sig.baseline_ready
+        ? a.detail.explanation.abnormality
+        : quiet && sig.z_response !== null
+          ? `Nothing unusual to explain. The test-to-reference ratio is ${num(Math.abs(sig.z_response), 1)} robust SD from this station's usual value.`
+          : 'No supporting measurement moved with this response, so no candidate factor is shown.'
+  return (
+    <aside className="ai-note" aria-label="AI note">
+      <Bird className="ai-bird" />
+      <div>
+        <p>{text}</p>
+        <Link to="/analysis">See the evidence →</Link>
+      </div>
+    </aside>
+  )
+}
+
+function Fleet() {
+  const { stations, station, selectStation } = useApp()
+  return (
+    <section className="fleet" aria-label="All stations">
+      {stations.map((s) => (
+        <StationCard key={s.code} s={s} current={s.code === station.code} onPick={() => selectStation(s.code)} />
+      ))}
+    </section>
+  )
+}
+
+function StationCard({ s, current, onPick }: { s: Station; current: boolean; onPick: () => void }) {
+  const now = useNow()
+  const l = s.latest_assessment
+  const offline = s.status === 'offline'
+  const value = offline ? null : (l?.inhibition ?? null)
+  const zone = rangeOf(value, l?.thresholds ?? null)
+  const word = offline ? 'Offline' : !l ? s.status_label : zone !== null ? `${RANGE_NAMES[zone]} range` : severityWord(l.severity)
+  const ink = zone === null ? 'var(--ink-2)' : ['var(--ok-ink)', '#E6F07A', 'var(--warn-ink)', 'var(--crit-ink)'][zone]
+  return (
+    <button className={zone !== null && zone >= 2 ? 'hot' : undefined} aria-current={current} onClick={onPick}>
+      <Dial value={value} thresholds={l?.thresholds ?? null} size={74} muted={offline || !l} label={`${s.name}: ${word}`} />
+      <span>
+        <b>{s.name}</b>
+        <span className="word" style={{ color: ink }}>
+          {word}
+        </span>
+        <small>
+          {s.code} · {s.origin === 'simulated' ? 'simulated' : 'live hardware'} · {s.last_reading_at ? ago(s.last_reading_at, now) : 'no data yet'}
+        </small>
+      </span>
+    </button>
   )
 }

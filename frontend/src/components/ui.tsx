@@ -1,6 +1,7 @@
-import { AlertTriangle, Check, CircleDashed, CircleHelp, OctagonAlert, WifiOff, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Check, CircleDashed, OctagonAlert, WifiOff, type LucideIcon } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { dateTime } from '../lib/format'
+import { SEVERITY_ZONE, ZONE } from '../lib/ranges'
 import { PRESET_LABEL, type Preset, type Range } from '../lib/range'
 import type { Origin, Severity, Status } from '../lib/types'
 
@@ -20,23 +21,43 @@ export function StatusBadge({ status, label }: { status: Status; label: string }
   )
 }
 
-const SEV: Record<Severity, [Status, string]> = {
-  normal: ['healthy', 'Normal'],
-  mild: ['warning', 'Mild inhibition'],
-  moderate: ['warning', 'Moderate inhibition'],
-  severe: ['critical', 'Severe inhibition'],
-  unclassified: ['pending', 'Unclassified'],
-  inconclusive: ['pending', 'Inconclusive'],
-  insufficient: ['offline', 'Not enough data'],
+const SEV_LABEL: Record<Severity, string> = {
+  normal: 'Normal',
+  mild: 'Mild',
+  moderate: 'Moderate',
+  severe: 'Severe',
+  unclassified: 'Unclassified',
+  inconclusive: 'Inconclusive',
+  insufficient: 'Not enough data',
+}
+
+/**
+ * A small 270° arc filled to the range it names, the same shape as the dial. Grey track only when
+ * there is no validated range, so an unclassified result never looks like a level.
+ */
+export function RangeGlyph({ zone, size = 16 }: { zone: number | null | undefined; size?: number }) {
+  const r = size / 2 - 2
+  const c = size / 2
+  const pt = (f: number) => {
+    const a = ((135 + 270 * f) * Math.PI) / 180
+    return `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`
+  }
+  const arc = (f: number) => `M${pt(0)}A${r} ${r} 0 ${f * 270 > 180 ? 1 : 0} 1 ${pt(f)}`
+  const lit = zone != null
+  return (
+    <svg className="range-glyph" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      <path d={arc(1)} fill="none" stroke="currentColor" strokeOpacity={0.22} strokeWidth={2.4} strokeLinecap="round" />
+      {lit && <path d={arc((zone + 1) / 4)} fill="none" stroke={ZONE[zone]} strokeWidth={2.4} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 3px ${ZONE[zone]})` }} />}
+    </svg>
+  )
 }
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
-  const [status, label] = SEV[severity]
-  const Icon = severity === 'unclassified' || severity === 'inconclusive' ? CircleHelp : STATUS_ICON[status]
+  const zone = SEVERITY_ZONE[severity]
   return (
-    <span className={`badge s-${status} sev-${severity}`}>
-      <Icon size={13} strokeWidth={2.4} aria-hidden />
-      {label}
+    <span className={`badge sev sev-${severity}`} style={zone != null ? { color: ZONE[zone] } : undefined}>
+      <RangeGlyph zone={zone} />
+      {SEV_LABEL[severity]}
     </span>
   )
 }

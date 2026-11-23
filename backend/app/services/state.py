@@ -92,7 +92,15 @@ def get_state(db: Session, station: Station) -> dict:
     status, reason = derive_status(a, last, station, now)
     for s in state["sensors"]:
         s["connection"] = _connection(s["latest"], station, now)
-    return {**state, "status": status, "status_label": STATUS_LABEL[status], "status_reason": reason}
+    brief = None
+    if a is not None:
+        t = a.detail.get("threshold", {})
+        brief = {
+            "inhibition": a.inhibition, "severity": a.severity, "data_until": a.data_until.isoformat(),
+            # Ranges are only shown where the assessment was allowed to use them.
+            "thresholds": t.get("values") if t.get("used") else None,
+        }
+    return {**state, "status": status, "status_label": STATUS_LABEL[status], "status_reason": reason, "latest": brief}
 
 
 def _connection(latest: dict | None, station: Station, now: datetime) -> str:
@@ -109,6 +117,6 @@ def station_summary(db: Session, station: Station) -> dict:
         "code": station.code, "name": station.name, "description": station.description, "origin": station.origin,
         "facility": station.facility.name, "location": station.facility.location, "timezone": station.facility.timezone,
         "status": st["status"], "status_label": st["status_label"], "status_reason": st["status_reason"],
-        "last_reading_at": st["last_reading_at"], "open_alerts": st["open_alerts"],
+        "last_reading_at": st["last_reading_at"], "open_alerts": st["open_alerts"], "latest_assessment": st["latest"],
         "expected_interval_seconds": station.expected_interval_seconds,
     }

@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { post } from '../lib/api'
 import { dateTime, duration, num } from '../lib/format'
 import type { Alert } from '../lib/types'
-import { Dialog, StatusIcon } from './ui'
+import { SEVERITY_ZONE } from '../lib/ranges'
+import { Dialog, RangeGlyph, StatusIcon } from './ui'
 
 export function AlertList({ alerts }: { alerts: Alert[] }) {
   const [ack, setAck] = useState<Alert | null>(null)
@@ -14,9 +15,15 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
           const status = a.ended_at ? 'pending' : a.kind === 'offline' ? 'offline' : a.level
           return (
             <li key={a.id} className={a.ended_at ? 'ended' : 'open'}>
-              <span className={`pip s-${a.ended_at ? 'ended' : status}`}>
-                <StatusIcon status={a.kind === 'offline' ? 'offline' : a.level} size={14} />
-              </span>
+              {a.kind === 'inhibition' ? (
+                <span className={`pip pip-range ${a.ended_at ? 'ended' : ''}`}>
+                  <RangeGlyph zone={SEVERITY_ZONE[a.severity]} size={22} />
+                </span>
+              ) : (
+                <span className={`pip s-${a.ended_at ? 'ended' : status}`}>
+                  <StatusIcon status={a.kind === 'offline' ? 'offline' : a.level} size={14} />
+                </span>
+              )}
               <div>
                 <b>{a.title}</b>
                 <small>

@@ -3,6 +3,8 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { LineChart } from '../components/LineChart'
 import { MethodPanel } from '../components/Method'
+import { Dial } from '../components/Dial'
+import { rangeText, severityWord } from '../lib/ranges'
 import { Empty, Failed, Loading, Section, SeverityBadge } from '../components/ui'
 import { get, post } from '../lib/api'
 import { useApp } from '../lib/app'
@@ -57,7 +59,7 @@ export function Analysis() {
       <Verdict a={a} onRun={() => run.mutate()} running={run.isPending} />
       {run.isError && <p className="error">{run.error.message}</p>}
       <div className="grid-2">
-        <Section title="What was measured" note={a.detail.explanation.abnormality}>
+        <Section title="What was measured" note={`Unusual pattern: ${a.detail.explanation.abnormality.charAt(0).toLowerCase()}${a.detail.explanation.abnormality.slice(1)}`}>
           <dl className="evidence">
             {a.detail.explanation.evidence.map((e) => (
               <div key={e.label}>
@@ -100,20 +102,28 @@ export function Analysis() {
 
 function Verdict({ a, onRun, running }: { a: Assessment; onRun: () => void; running: boolean }) {
   const d = a.detail
+  const ranges = d.threshold.used && a.severity !== 'inconclusive' ? d.threshold.values : null
   const status = { severe: 'critical', moderate: 'warning', mild: 'warning', normal: 'healthy', unclassified: a.anomaly ? 'warning' : 'pending', inconclusive: 'warning', insufficient: 'offline' }[a.severity]
   return (
     <section className={`verdict s-${status}`} aria-label="Current assessment">
-      <div className="verdict-head">
+      <div className="verdict-head verdict-top">
         <div>
           <SeverityBadge severity={a.severity} />
           <h1>{d.explanation.headline}</h1>
           <p>{d.explanation.summary}</p>
+          <button className="btn" onClick={onRun} disabled={running} style={{ marginTop: 18 }}>
+            <RefreshCw size={15} aria-hidden className={running ? 'spin' : ''} /> Analyse now
+          </button>
         </div>
-        <button className="btn" onClick={onRun} disabled={running}>
-          <RefreshCw size={15} aria-hidden className={running ? 'spin' : ''} /> Analyse now
-        </button>
+        <Dial
+          value={a.inhibition}
+          thresholds={ranges}
+          size={250}
+          caption={ranges ? rangeText(a.inhibition, ranges, severityWord(a.severity)) : severityWord(a.severity)}
+          muted={a.severity === 'insufficient'}
+        />
       </div>
-      {d.threshold.used && a.inhibition !== null && a.severity !== 'inconclusive' ? <Scale value={a.inhibition} t={d.threshold.values} /> : <p className="scale-off">Severity scale not shown. {a.severity === 'inconclusive' ? 'The reference chamber is outside its normal range.' : d.threshold.reason}</p>}
+      {!ranges && <p className="scale-off">No ranges drawn. {a.severity === 'inconclusive' ? 'The reference chamber is outside its normal range.' : d.threshold.reason}</p>}
       <dl className="verdict-facts">
         <div>
           <dt>Confidence</dt>
@@ -140,28 +150,6 @@ function Verdict({ a, onRun, running }: { a: Assessment; onRun: () => void; runn
   )
 }
 
-function Scale({ value, t }: { value: number; t: Series['thresholds'] }) {
-  const cuts = [0, t.mild!, t.moderate!, t.severe!, 100]
-  const names = ['Normal', 'Mild', 'Moderate', 'Severe']
-  const at = Math.min(100, Math.max(0, value))
-  return (
-    <div className="scale" role="img" aria-label={`Inhibition indicator ${num(value)} percent. Boundaries: mild ${t.mild}, moderate ${t.moderate}, severe ${t.severe} percent.`}>
-      <div className="scale-mark" style={{ left: `${at}%` }}>
-        <b>{num(value)}%</b>
-      </div>
-      <div className="scale-bar">
-        {names.map((n, i) => (
-          <span key={n} className={`band b${i}`} style={{ width: `${cuts[i + 1] - cuts[i]}%` }}>
-            <em>
-              {n}
-              {i > 0 && <span> from {cuts[i]}%</span>}
-            </em>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function Factors({ a }: { a: Assessment }) {
   const d = a.detail

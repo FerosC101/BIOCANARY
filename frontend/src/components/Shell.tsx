@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, ChevronDown, FileText, LayoutGrid, LogOut, ScanSearch } from 'lucide-react'
+import { ChevronDown, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
@@ -10,15 +10,16 @@ import type { SystemStatus } from '../lib/types'
 import { OriginTag, StatusIcon, useDismiss } from './ui'
 
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutGrid },
-  { to: '/monitoring', label: 'Monitoring', icon: Activity },
-  { to: '/analysis', label: 'AI Analysis', icon: ScanSearch },
-  { to: '/reports', label: 'Reports', icon: FileText },
+  { to: '/', label: 'Dashboard' },
+  { to: '/monitoring', label: 'Monitoring' },
+  { to: '/analysis', label: 'AI Analysis' },
+  { to: '/reports', label: 'Reports' },
 ]
 
 export function Shell() {
-  const { user, stream } = useApp()
+  const { user, stream, station } = useApp()
   const qc = useQueryClient()
+  const now = useNow()
   const signOut = async () => {
     await post('/auth/logout')
     qc.clear()
@@ -29,26 +30,23 @@ export function Shell() {
       <a className="skip" href="#main">
         Skip to content
       </a>
-      <aside className="side">
-        <Logo className="side-logo" tone="white" />
-        <nav aria-label="Primary">
-          {NAV.map(({ to, label, icon: Icon }) => (
+      <header className="top">
+        <Logo className="top-logo" tone="white" />
+        <nav className="tabs" aria-label="Primary">
+          {NAV.map(({ to, label }) => (
             <NavLink key={to} to={to} end={to === '/'}>
-              <Icon size={19} strokeWidth={1.9} aria-hidden />
-              <span>{label}</span>
+              {label}
             </NavLink>
           ))}
         </nav>
-        <svg className="side-arcs" viewBox="0 0 240 240" aria-hidden>
-          {[34, 62, 96, 136, 182].map((r) => (
-            <circle key={r} cx="0" cy="240" r={r} />
-          ))}
-        </svg>
-        <div className="side-foot">
-          <p>
-            Listen today.
-            <br />A cleaner tomorrow.
-          </p>
+        <div className="top-right">
+          <StationPicker />
+          <OriginTag origin={station.origin} />
+          <span className={`live ${station.status === 'offline' ? 'lost' : stream}`} title={station.last_reading_at ? `Last reading ${exact(station.last_reading_at)}` : undefined}>
+            <i />
+            {station.last_reading_at ? ago(station.last_reading_at, now) : 'No readings yet'}
+          </span>
+          <SystemMenu />
           <div className="who">
             <div>
               <b>{user.name}</b>
@@ -59,35 +57,16 @@ export function Shell() {
             </button>
           </div>
         </div>
-      </aside>
+      </header>
+      {stream === 'lost' && (
+        <p className="notice" role="status">
+          Live updates are disconnected. Reconnecting; figures refresh every minute meanwhile.
+        </p>
+      )}
       <div className="body">
-        <TopBar />
-        {stream === 'lost' && (
-          <p className="notice" role="status">
-            Live updates are disconnected. Reconnecting; figures refresh every minute meanwhile.
-          </p>
-        )}
         <main id="main" tabIndex={-1}>
           <Outlet />
         </main>
-      </div>
-    </div>
-  )
-}
-
-function TopBar() {
-  const { station, stream } = useApp()
-  const now = useNow()
-  return (
-    <div className="top">
-      <StationPicker />
-      <OriginTag origin={station.origin} />
-      <div className="top-right">
-        <span className={`live ${station.status === 'offline' ? 'lost' : stream}`} title={station.last_reading_at ? `Last reading ${exact(station.last_reading_at)}` : undefined}>
-          <i />
-          {station.last_reading_at ? `Last reading ${ago(station.last_reading_at, now)}` : 'No readings yet'}
-        </span>
-        <SystemMenu />
       </div>
     </div>
   )

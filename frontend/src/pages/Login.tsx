@@ -52,7 +52,7 @@ export function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
           <circle cx="470" cy="330" r="268" fill="url(#ring)" />
           <circle cx="470" cy="330" r="214" fill="url(#disc)" />
         </svg>
-        <DeviceModel dark lamps={LAMPS} active view="front" label="The BIOCANARY device, with a blue reference chamber beside a green test chamber" />
+        <DeviceModel dark fill lamps={LAMPS} active view="front" label="The BIOCANARY device, with a blue reference chamber beside a green test chamber" />
         <div className="login-copy">
           <p className="login-tag">
             Listen today. <br />A cleaner tomorrow.
@@ -62,7 +62,7 @@ export function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
       </div>
       <div className="login-form">
         <form onSubmit={submit}>
-          <Logo className="login-logo" />
+          <Logo className="login-logo" tone="white" />
           <h1>Sign in</h1>
           <label>
             Email

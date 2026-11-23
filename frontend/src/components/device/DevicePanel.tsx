@@ -52,7 +52,7 @@ export function DevicePanel({ sensors, devices }: { sensors: SensorState[]; devi
     >
       <div className="dv-grid">
         <div className="dv-stage">
-          <DeviceModel lamps={lamps} active={reporting} view={view} label="3D model of the BIOCANARY device: a blue reference chamber and a green test chamber on a white base, with a status panel on the right" markers={TABS} selected={part} onSelect={choose} />
+          <DeviceModel dark lamps={lamps} active={reporting} view={view} label="3D model of the BIOCANARY device: a blue reference chamber and a green test chamber on a white base, with a status panel on the right" markers={TABS} selected={part} onSelect={choose} />
           <div className="dv-under">
             <div className="segmented" role="group" aria-label="View angle">
               {ANGLES.map((a) => (

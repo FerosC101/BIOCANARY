@@ -8,13 +8,15 @@ interface Props {
   dark?: boolean
   /** Text alternative for the model. */
   label: string
+  /** Fill the parent instead of keeping a 3:2 frame. */
+  fill?: boolean
   markers?: { part: Part; label: string }[]
   selected?: Part | null
   onSelect?: (p: Part) => void
 }
 
 /** Interactive 3D device. Shows a still image until the model is ready, or if WebGL is unavailable. */
-export function DeviceModel({ lamps, active, view, dark = false, label, markers, selected, onSelect }: Props) {
+export function DeviceModel({ lamps, active, view, dark = false, fill = false, label, markers, selected, onSelect }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const pins = useRef<Partial<Record<Part, HTMLButtonElement | null>>>({})
   const scene = useRef<DeviceScene | null>(null)
@@ -60,7 +62,7 @@ export function DeviceModel({ lamps, active, view, dark = false, label, markers,
   useEffect(() => scene.current?.setView(view), [view, state])
 
   return (
-    <div className={`dv dv-${state}${dark ? ' dv-dark' : ''}`}>
+    <div className={`dv dv-${state}${fill ? ' dv-fill' : ''}`}>
       <img src="/device/device.webp" alt={state === 'ready' ? '' : label} width={1536} height={1024} aria-hidden={state === 'ready'} />
       {state !== 'failed' && <canvas ref={canvas} role="img" aria-label={label} />}
       {state === 'ready' &&

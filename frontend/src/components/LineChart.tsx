@@ -218,9 +218,9 @@ export function LineChart(props: Props) {
           ))}
         <g clipPath={`url(#${clip})`}>
           {gap && series.length > 1 && <path className="gap" d={areas(series[0].values, series[1].values)} />}
-          {area && series.length === 1 && <path d={areas(series[0].values, null)} fill={series[0].color} opacity="0.09" />}
+          {area && series.length === 1 && <path d={areas(series[0].values, null)} fill={series[0].color} opacity="0.14" />}
           {series.map((s) => (
-            <path key={s.key} className="line" d={line(s.values)} stroke={s.color} />
+            <path key={s.key} className="line" d={line(s.values)} stroke={s.color} style={{ filter: `drop-shadow(0 0 5px ${s.color})` }} />
           ))}
         </g>
         {marks

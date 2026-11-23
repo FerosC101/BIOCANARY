@@ -2,32 +2,34 @@
 
 ## Logo
 
-The vector in `frontend/src/brand/logoPaths.ts` is traced from `docs/brand/reference.png` (99% overlap with the source). Do not edit, redraw or stretch it. Deep Blue on light surfaces; solid white on Dark Navy. SVG files are in `docs/brand`. Replace the trace with the designer's original vector when available.
+The vector in `frontend/src/brand/logoPaths.ts` is traced from `docs/brand/reference.png` (99% overlap with the source). Do not edit, redraw or stretch it. The application runs on a dark night surface, so the logo is solid white there; Deep Blue only on light surfaces such as the device body and PDF reports. SVG files are in `docs/brand`. Replace the trace with the designer's original vector when available.
 
-## Colour
+## Style: bioluminescent
+
+A deep-navy night surface (#04122C) with soft blue and green glows, glowing numbers and chart lines, and quiet translucent glass panels. Navigation is four text tabs in a top bar with a glowing lime underline on the active one; on phones the tabs become a fixed bar at the bottom. Tokens are in `frontend/src/index.css` (`:root`).
 
 | Token | Hex | Use |
 |---|---|---|
-| `--deep` | #254F91 | Headings, primary buttons, **reference** series |
-| `--navy` | #0B2D6B | Sidebar, key figures, inhibition indicator |
-| `--electric` | #2F6BFF | Links, focus, supporting measurements |
-| `--green` | #4FD96B | Live indicator, gradients |
-| `--lime` | #A6F684 | Active navigation icon, ring gradient |
-| `--mint` | #83E6A3 | Difference shading, accents |
-| `--pale` | #F0FFD7 | Healthy status and summary surfaces |
+| `--night` | #04122C | Page surface (Dark Navy darkened) |
+| `--solid` | #0B1F47 | Popovers, dialogs, menus |
+| `--surface` | white 4.5% | Glass panels |
+| `--electric` | #2F6BFF | Links, focus, background glow |
+| `--green` / `--lime` | #4FD96B / #A6F684 | Live indicator, active tab, primary button gradient |
+| `--pale` | #F0FFD7 | Accent text on the night surface |
 
-Three functional additions are not in the brand palette:
+Series colours (`frontend/src/lib/colors.ts`) are lighter steps of the brand hues so they glow and stay readable on the night surface: reference #8FB6FF, exposed #7CF09A, inhibition #FFB547, supporting measurements #C6B8FF.
 
-- **Exposed series #1FA34A**, a darker step of Vibrant Green. #4FD96B on white has 1.8:1 contrast, too faint for a 2 px line. The pair #254F91 and #1FA34A passes colour-vision and 3:1 contrast checks.
-- **Amber** for warning and **red** for critical. They mean status only, never a data series, and always appear with an icon and label.
+## Ranges and the dial
+
+Inhibition is shown on a 270° dial (`components/Dial.tsx`). The protocol's ranges are drawn as faint zones (green, yellow, amber, red) with ticks at the boundaries; the value arc glows in its zone colour and the caption names the range in words ("Moderate range · 25–50%"). Elsewhere the same shape appears small: mini dials on the station cards and a 16 px range arc (`RangeGlyph`) beside severity words in tables and alerts.
+
+- No pills, warning flags or segmented severity bars. Level reads from position on the arc plus a word, never colour alone.
+- Ranges appear only when validated thresholds apply. Otherwise the ring is grey and the caption says "Unclassified"; offline stations show a dimmed last-known value.
+- Amber and red mean range only, never a data series.
 
 ## Type
 
 Outfit for headings and figures (its single-storey *a* matches the wordmark), Figtree for text. Both are open source and bundled, so the application works without internet access.
-
-## The response disc
-
-The ring and gradient disc from the brand sheet are used as a measurement on the dashboard. The outer circle is reference activity. The disc's **area** is exposed activity on the same scale, so the visible ring is the lost activity.
 
 ## Charts
 

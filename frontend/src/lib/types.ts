@@ -25,6 +25,8 @@ export interface Station {
   last_reading_at: string | null
   open_alerts: number
   expected_interval_seconds: number
+  /** Newest assessment; thresholds only when that assessment was allowed to use them. */
+  latest_assessment: { inhibition: number | null; severity: Severity; data_until: string; thresholds: Series['thresholds'] | null } | null
 }
 
 export interface SensorState {

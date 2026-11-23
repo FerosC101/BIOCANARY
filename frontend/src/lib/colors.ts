@@ -1,5 +1,5 @@
-/** Reference / exposed pair: validated for colour-vision deficiency and 3:1 contrast on white. */
-export const REFERENCE = '#254F91'
-export const EXPOSED = '#1FA34A'
-export const INDICATOR = '#0B2D6B'
-export const SUPPORT = '#2F6BFF'
+/** Series colours on the night ground: the device's own light. Reference and test differ in hue and lightness. */
+export const REFERENCE = '#8FB6FF'
+export const EXPOSED = '#7CF09A'
+export const INDICATOR = '#FFB547'
+export const SUPPORT = '#C6B8FF'
