@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { get } from './api'
+import { isDemo } from './demo'
 import type { Station, User } from './types'
 
 interface AppState {
@@ -8,7 +9,7 @@ interface AppState {
   stations: Station[]
   station: Station
   selectStation: (code: string) => void
-  stream: 'connecting' | 'open' | 'lost'
+  stream: 'connecting' | 'open' | 'lost' | 'demo'
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -24,8 +25,9 @@ const STORAGE = 'biocanary.station'
 /** Live updates: the server announces new data and the affected queries refetch. */
 function useStream(): AppState['stream'] {
   const qc = useQueryClient()
-  const [state, setState] = useState<AppState['stream']>('connecting')
+  const [state, setState] = useState<AppState['stream']>(isDemo() ? 'demo' : 'connecting')
   useEffect(() => {
+    if (isDemo()) return
     let source: EventSource
     let opened = false
     let last = Date.now()

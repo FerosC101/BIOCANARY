@@ -18,6 +18,8 @@ Wastewater early-warning platform: compares a reference microbial culture with o
 - `device3d/`: Blender model. `build_device.py` rebuilds the `.blend`; `export_web.py` + `optimize_web.mjs` make the web GLB. Commands in `device3d/README.md`. Blender is at `/Applications/Blender.app/Contents/MacOS/Blender`; the first GPU render compiles kernels for about 10 minutes.
 - `docs/`: architecture, hardware API, AI method, Huawei deployment, design system.
 
+- Offline demo: without a reachable API the frontend serves `public/demo/snapshot.json` (`src/lib/demo.ts`, banner on every screen, read-only). Re-record with `npm run capture:demo`; build static with `npm run build:demo`.
+
 ## Rules (product decisions, do not break)
 - Exactly five nav sections: Dashboard, Facility, Monitoring, AI Analysis, Reports.
 - Label simulated data everywhere. Never show a Huawei service as connected without a live probe. Never silently fall back from ModelArts.

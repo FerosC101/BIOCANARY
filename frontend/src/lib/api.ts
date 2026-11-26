@@ -6,7 +6,15 @@ export class ApiError extends Error {
   }
 }
 
+type Offline = (method: string, path: string, body?: unknown) => Promise<unknown>
+let offline: Offline | null = null
+/** Route every request to the offline demo instead of the server (see lib/demo.ts). */
+export const setOffline = (h: Offline) => {
+  offline = h
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (offline) return (await offline(method, path, body)) as T
   let res: Response
   try {
     res = await fetch('/api/v1' + path, {

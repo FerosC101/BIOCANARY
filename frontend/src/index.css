@@ -5929,3 +5929,19 @@ body::before {
     radial-gradient(900px 600px at 0% 100%, rgb(47 107 255 / 16%), transparent 70%),
     #04122c;
 }
+
+/* offline demo */
+.demo-banner {
+  position: relative;
+  z-index: 50;
+  margin: 0;
+  padding: 9px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: #04122c;
+  background: linear-gradient(110deg, #ffe2b0, #ffd08a);
+}
+.demo-banner a {
+  color: #0b2d6b;
+  font-weight: 700;
+}

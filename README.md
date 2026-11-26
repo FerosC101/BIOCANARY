@@ -30,6 +30,17 @@ cd backend && .venv/bin/python -m app.simulation.device --trigger BC-S02 --peak 
 
 To start over, stop the stack, delete `backend/var/biocanary.db*` and run `scripts/setup.sh` again.
 
+## Offline demo
+
+When the BIOCANARY server cannot be reached, the web app runs as an **offline demo** on responses recorded from the simulated stations (`frontend/public/demo/snapshot.json`). A banner says so on every screen, times are moved forward so the recording reads as recent, nothing can be saved, and every cloud service is shown as not connected.
+
+- Force it with `?demo` in the URL, or build a static copy for any web host: `cd frontend && npm run build:demo` (output in `frontend/dist-demo`).
+- Refresh the recording from a running stack with simulated data: `cd frontend && npm run capture:demo`. The script refuses to record hardware stations.
+
+## Deployment status
+
+Ready to deploy on Huawei Cloud (Docker images, compose file and steps in [docs/deployment-huawei-cloud.md](docs/deployment-huawei-cloud.md)) but **not yet hosted**: the adapters are tested against local stand-ins, not a live Huawei Cloud account.
+
 ## How it fits together
 
 ```

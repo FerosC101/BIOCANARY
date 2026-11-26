@@ -6,6 +6,7 @@ import '@fontsource-variable/figtree'
 import '@fontsource-variable/outfit'
 import { App } from './App'
 import { ApiError } from './lib/api'
+import { startDemoIfOffline } from './lib/demo'
 import './index.css'
 
 const client = new QueryClient({
@@ -18,12 +19,15 @@ const client = new QueryClient({
   },
 })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={client}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
+// Without a reachable server the app runs as a labelled offline demo on recorded data.
+startDemoIfOffline().finally(() =>
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={client}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  ),
 )

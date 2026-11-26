@@ -6,6 +6,7 @@ import { Shell } from './components/Shell'
 import { Empty, Failed } from './components/ui'
 import { ApiError, get } from './lib/api'
 import { AppProvider, useStations } from './lib/app'
+import { isDemo } from './lib/demo'
 import type { User } from './lib/types'
 import { Analysis } from './pages/Analysis'
 import { Dashboard } from './pages/Dashboard'
@@ -16,7 +17,26 @@ import { Plant } from './pages/Plant'
 import { Reports } from './pages/Reports'
 import { Wall } from './pages/Wall'
 
+function DemoBanner() {
+  if (!isDemo()) return null
+  return (
+    <p className="demo-banner" role="status">
+      <b>Offline demo.</b> The BIOCANARY server is not connected, so this shows data recorded earlier from simulated stations. Nothing you do here is saved.{' '}
+      <a href={location.pathname}>Try the live server</a>
+    </p>
+  )
+}
+
 export function App() {
+  return (
+    <>
+      <DemoBanner />
+      <Main />
+    </>
+  )
+}
+
+function Main() {
   const qc = useQueryClient()
   const me = useQuery({
     queryKey: ['me'],

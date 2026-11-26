@@ -38,7 +38,7 @@ export function Shell() {
   const live = (
     <span className={`nav-live ${station.status === 'offline' ? 'lost' : stream}`} title={station.last_reading_at ? `Last reading ${exact(station.last_reading_at)}` : undefined}>
       <i />
-      {station.status === 'offline' ? 'Offline' : stream === 'lost' ? 'Reconnecting' : 'Live'} · {station.last_reading_at ? ago(station.last_reading_at, now) : 'no readings yet'}
+      {stream === 'demo' ? 'Offline demo · recorded data' : <>{station.status === 'offline' ? 'Offline' : stream === 'lost' ? 'Reconnecting' : 'Live'} · {station.last_reading_at ? ago(station.last_reading_at, now) : 'no readings yet'}</>}
     </span>
   )
   const assessed = station.latest_assessment ? `assessed ${time(station.latest_assessment.data_until)}` : 'not assessed yet'
