@@ -30,6 +30,18 @@ interface Props {
   /** Other values the y axis must also cover, so paired charts share one scale. */
   alsoFit?: (number | null)[][]
   area?: boolean
+  /** Draw curves through the points instead of straight segments. */
+  smooth?: boolean
+  /** Two faint gridlines, no line-end labels: for summary charts. */
+  minimal?: boolean
+  /** Fixed left and right margins, so stacked charts share one time axis. */
+  pad?: { l: number; r: number }
+  /** Time labels under the plot (default true). */
+  xAxis?: boolean
+  /** Value labels beside the gridlines (default true). */
+  yLabels?: boolean
+  /** Key of a series to give a soft glow fill down to the axis. */
+  under?: string
 }
 
 function niceStep(span: number, target: number): number {
@@ -49,7 +61,7 @@ function timeTicks(a: number, b: number, count: number): number[] {
 }
 
 export function LineChart(props: Props) {
-  const { t, series, unit, digits = 1, gap, guides = [], marks = [], includeZero, minSpan = 1, label, onHover, onSelect, compact, area, alsoFit } = props
+  const { t, series, unit, digits = 1, gap, guides = [], marks = [], includeZero, minSpan = 1, label, onHover, onSelect, compact, area, alsoFit, smooth, minimal, pad, xAxis = true, yLabels = true, under } = props
   const height = props.height ?? 240
   const box = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(640)
@@ -66,7 +78,7 @@ export function LineChart(props: Props) {
     return () => ro.disconnect()
   }, [])
 
-  const direct = series.length > 1 && !compact && width > 460
+  const direct = series.length > 1 && !compact && !minimal && width > 460
 
   const { lo, hi, ticks } = useMemo(() => {
     const all = [...series.map((s) => s.values), ...(alsoFit ?? [])].flatMap((x) => x.filter((v): v is number => v !== null))
@@ -83,17 +95,18 @@ export function LineChart(props: Props) {
       b = a + minSpan
     }
     const pad = (b - a) * 0.06
-    const step = niceStep(b - a + pad * 2, compact ? 3 : 5)
+    const step = niceStep(b - a + pad * 2, minimal ? 2 : compact ? 3 : 5)
     // Below zero the axis ends just under the data instead of at a full tick.
     a = includeZero ? (a === 0 ? 0 : a - pad) : Math.floor((a - pad) / step) * step
     b = Math.ceil((b + pad) / step) * step
     const list: number[] = []
     for (let v = Math.ceil(a / step - 1e-9) * step; v <= b + step / 1000; v += step) list.push(Math.round(v * 1e6) / 1e6)
     return { lo: a, hi: b, ticks: list }
-  }, [series, includeZero, minSpan, compact, alsoFit])
+  }, [series, includeZero, minSpan, compact, minimal, alsoFit])
 
   const tickText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(Math.abs(hi - lo) < 1 ? 2 : 1))
-  const m = { l: Math.max(compact ? 30 : 38, 14 + Math.max(0, ...ticks.map((v) => tickText(v).length)) * 7), r: compact ? 14 : width > 460 ? 82 : guides.length ? 64 : 12, t: 10, b: 24 }
+  const m0 = { l: Math.max(compact ? 30 : 38, 14 + Math.max(0, ...ticks.map((v) => tickText(v).length)) * 7), r: compact || (minimal && !guides.length) ? 14 : width > 460 ? 82 : guides.length ? 64 : 12, t: 10, b: xAxis ? 24 : 6 }
+  const m = pad ? { ...m0, ...pad } : m0
   const w = width - m.l - m.r
   const h = height - m.t - m.b
 
@@ -103,17 +116,31 @@ export function LineChart(props: Props) {
   const x = (v: number) => m.l + ((v - t0) / Math.max(1, t1 - t0)) * w
   const y = (v: number) => m.t + (1 - (v - lo) / (hi - lo || 1)) * h
 
+  /** Path through points; with `smooth`, a Catmull-Rom curve that passes through every point. */
+  const trace = (pts: [number, number][], start: 'M' | 'L') => {
+    if (!pts.length) return ''
+    let d = `${start}${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [b, c] = [pts[i], pts[i + 1]]
+      if (!smooth) {
+        d += `L${c[0].toFixed(1)} ${c[1].toFixed(1)}`
+        continue
+      }
+      const a = pts[i - 1] ?? b
+      const e = pts[i + 2] ?? c
+      d += `C${(b[0] + (c[0] - a[0]) / 6).toFixed(1)} ${(b[1] + (c[1] - a[1]) / 6).toFixed(1)} ${(c[0] - (e[0] - b[0]) / 6).toFixed(1)} ${(c[1] - (e[1] - b[1]) / 6).toFixed(1)} ${c[0].toFixed(1)} ${c[1].toFixed(1)}`
+    }
+    return d
+  }
   const line = (values: (number | null)[]) => {
     let d = ''
-    let pen = false
-    values.forEach((v, i) => {
-      if (v === null) {
-        pen = false
-        return
-      }
-      d += `${pen ? 'L' : 'M'}${x(t[i]).toFixed(1)} ${y(v).toFixed(1)}`
-      pen = true
-    })
+    let run: [number, number][] = []
+    const flush = () => {
+      d += trace(run, 'M')
+      run = []
+    }
+    values.forEach((v, i) => (v === null ? flush() : run.push([x(t[i]), y(v)])))
+    flush()
     return d
   }
   const areas = (top: (number | null)[], bottom: (number | null)[] | null) => {
@@ -121,8 +148,8 @@ export function LineChart(props: Props) {
     let run: number[] = []
     const flush = () => {
       if (run.length > 1) {
-        d += run.map((i, k) => `${k ? 'L' : 'M'}${x(t[i]).toFixed(1)} ${y(top[i] as number).toFixed(1)}`).join('')
-        d += [...run].reverse().map((i) => `L${x(t[i]).toFixed(1)} ${y(bottom ? (bottom[i] as number) : Math.max(lo, 0)).toFixed(1)}`).join('') + 'Z'
+        d += trace(run.map((i) => [x(t[i]), y(top[i] as number)]), 'M')
+        d += trace([...run].reverse().map((i) => [x(t[i]), y(bottom ? (bottom[i] as number) : Math.max(lo, 0))]), 'L') + 'Z'
       }
       run = []
     }
@@ -161,6 +188,13 @@ export function LineChart(props: Props) {
   const labels = ends.map((e) => ({ ...e, ly: e.at })).sort((a, b) => a.at - b.at)
   for (let i = 1; i < labels.length; i++) labels[i].ly = Math.max(labels[i].ly, labels[i - 1].ly + 16)
 
+  // Range labels sit at their line but never closer than 12 px to the next one.
+  const guideLabels = guides
+    .filter((g) => g.value > lo && g.value < hi)
+    .map((g) => ({ ...g, ly: y(g.value) }))
+    .sort((a, b) => b.ly - a.ly)
+  for (let i = 1; i < guideLabels.length; i++) guideLabels[i].ly = Math.min(guideLabels[i].ly, guideLabels[i - 1].ly - 12)
+
   const tipLeft = index !== null ? x(t[index]) : 0
   const span = t1 - t0
   const xt = timeTicks(t0, t1, Math.max(2, Math.floor(w / 92)))
@@ -194,29 +228,41 @@ export function LineChart(props: Props) {
           <rect x={m.l} y={0} width={Math.max(0, w)} height={height} />
         </clipPath>
         {ticks.map((v) => (
-          <g key={v}>
+          <g key={v} className={minimal ? 'faint' : undefined}>
             <line className="grid" x1={m.l} x2={m.l + w} y1={y(v)} y2={y(v)} />
-            <text className="tick" x={m.l - 8} y={y(v) + 3.5} textAnchor="end">
-              {tickText(v)}
-            </text>
+            {yLabels && (
+              <text className="tick" x={m.l - 8} y={y(v) + 3.5} textAnchor="end">
+                {tickText(v)}
+              </text>
+            )}
           </g>
         ))}
-        {xt.map((v) => (
+        {xAxis && xt.map((v) => (
           <text key={v} className="tick" x={x(v)} y={height - 6} textAnchor={x(v) > width - 22 ? 'end' : 'middle'}>
             {span > 36 * 3600_000 ? day(v) : time(v)}
           </text>
         ))}
-        {guides
-          .filter((g) => g.value > lo && g.value < hi)
-          .map((g) => (
-            <g key={g.label}>
-              <line className="guide" x1={m.l} x2={m.l + w} y1={y(g.value)} y2={y(g.value)} />
-              <text className="tick" x={m.l + w + 6} y={y(g.value) + 3.5}>
-                {g.label}
-              </text>
-            </g>
-          ))}
+        {guideLabels.map((g) => (
+          <g key={g.label}>
+            <line className="guide" x1={m.l} x2={m.l + w} y1={y(g.value)} y2={y(g.value)} />
+            <text className="tick" x={m.l + w + 6} y={g.ly + 3.5}>
+              {g.label}
+            </text>
+          </g>
+        ))}
         <g clipPath={`url(#${clip})`}>
+          {under &&
+            series
+              .filter((x) => x.key === under)
+              .map((x) => (
+                <g key="under">
+                  <linearGradient id={`${clip}-u`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor={x.color} stopOpacity="0.2" />
+                    <stop offset="1" stopColor={x.color} stopOpacity="0" />
+                  </linearGradient>
+                  <path d={areas(x.values, null)} fill={`url(#${clip}-u)`} />
+                </g>
+              ))}
           {gap && series.length > 1 && <path className="gap" d={areas(series[0].values, series[1].values)} />}
           {area && series.length === 1 && <path d={areas(series[0].values, null)} fill={series[0].color} opacity="0.14" />}
           {series.map((s) => (

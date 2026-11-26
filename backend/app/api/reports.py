@@ -46,9 +46,9 @@ def create_report(body: ReportIn, db: Db, user: CurrentUser):
     check_period(start, end)
     now: datetime = utcnow()
     if body.format == "pdf":
-        data = build_pdf(build_report(db, station, start, end, body.severities), user.name, now)
+        data = build_pdf(build_report(db, station, start, end, body.severities), user.name, now, set(body.include))
     else:
-        data = build_csv(db, station, start, end, body.severities)
+        data = build_csv(db, station, start, end, body.severities, raw="raw" in body.include)
     tag = "_SIMULATED" if station.origin == "simulated" else ""
     filename = f"BIOCANARY_{station.code}_{start:%Y%m%d}-{end:%Y%m%d}{tag}.{body.format}"
     key = f"reports/{station.origin}/{station.code}/{now:%Y/%m}/{uuid4().hex}.{body.format}"

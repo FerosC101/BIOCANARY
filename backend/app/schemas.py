@@ -78,6 +78,8 @@ class ReportIn(BaseModel):
     end: datetime
     severities: list[Literal["mild", "moderate", "severe", "unclassified", "inconclusive"]] = []
     format: Literal["pdf", "csv"]
+    # PDF sections; "raw" switches the CSV from 10-minute rows to every individual reading.
+    include: list[Literal["verdicts", "charts", "events", "quality", "raw"]] = ["verdicts", "charts", "events", "quality"]
 
 
 class ProtocolIn(BaseModel):

@@ -133,6 +133,14 @@ def test_event_flows_from_device_to_alert_to_report(admin, db, history):
         data = admin.get(f"/api/v1/reports/{made['id']}/download").content
         assert data.startswith(magic)
     assert b"simulated" in data
+    # Include options: sections can be left out of the PDF, and "raw" lists individual readings with quality.
+    slim = admin.post("/api/v1/reports", json={"station": "SIM", **period, "format": "pdf", "include": []}).json()
+    full = admin.post("/api/v1/reports", json={"station": "SIM", **period, "format": "pdf"}).json()
+    assert slim["size_bytes"] < full["size_bytes"]
+    raw = admin.post("/api/v1/reports", json={"station": "SIM", **period, "format": "csv", "include": ["raw"]}).json()
+    rows = admin.get(f"/api/v1/reports/{raw['id']}/download").content.decode("utf-8-sig").splitlines()
+    assert rows[0].startswith("recorded_utc,") and ",valid," in rows[1]
+    assert admin.post("/api/v1/reports", json={"station": "SIM", **period, "format": "pdf", "include": ["nope"]}).status_code == 422
 
 
 def test_gap_and_series_are_null_not_interpolated(admin, db, history):
@@ -157,3 +165,17 @@ def test_events_are_validated(admin):
     post = lambda at: admin.post("/api/v1/stations/SIM/events", json={"occurred_at": at.isoformat(), "kind": "discharge", "note": "x"})  # noqa: E731
     assert post(utcnow()).status_code == 201
     assert post(utcnow() + timedelta(days=1)).status_code == 422
+
+
+def test_quality_grid_keeps_the_worst_state_per_cell(admin):
+    t = utcnow() - timedelta(minutes=50)
+    admin.post("/api/v1/ingest/readings", json=body(at=t, values={"ENV-TEMP": 22.0}), headers=H)
+    admin.post("/api/v1/ingest/readings", json=body(at=t + timedelta(minutes=10), values={"ENV-TEMP": -127}), headers=H)
+    start = (t - timedelta(minutes=10)).isoformat()
+    end = (t + timedelta(minutes=50)).isoformat()
+    r = admin.get("/api/v1/stations/LIVE/quality", params={"start": start, "end": end, "cells": 6})
+    assert r.status_code == 200
+    rows = {s["code"]: s for s in r.json()["sensors"]}
+    assert rows["ENV-TEMP"]["cells"][1:3] == ["valid", "invalid"]
+    assert rows["ENV-TEMP"]["valid"] == 0.5
+    assert rows["ENV-PH"]["cells"] == ["none"] * 6 and rows["ENV-PH"]["valid"] is None

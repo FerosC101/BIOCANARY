@@ -152,7 +152,8 @@ def _table(rows, widths, align_right=()):
     return t
 
 
-def build_pdf(r: dict, created_by: str, created_at: datetime) -> bytes:
+def build_pdf(r: dict, created_by: str, created_at: datetime, include: set[str] | None = None) -> bytes:
+    include = {"verdicts", "charts", "events", "quality"} if include is None else include
     tz = ZoneInfo(r["station"]["timezone"])
     fmt = lambda d: d.astimezone(tz).strftime("%d %b %Y, %H:%M")  # noqa: E731
     simulated = r["station"]["origin"] == "simulated"
@@ -189,8 +190,8 @@ def build_pdf(r: dict, created_by: str, created_at: datetime) -> bytes:
         Spacer(1, 8),
     ]
     stats = [
-        ("Inhibition events", str(len(r["events"]))), ("Peak inhibition", num(r["inhibition"]["max"], "%")),
-        ("Median inhibition", num(r["inhibition"]["median"], "%")), ("Paired data coverage", pct(r["performance"]["paired"])),
+        ("Assessments", f"{r['assessments']['total']:,}"), ("Inhibition events", str(len(r["events"]))),
+        ("Peak inhibition", num(r["inhibition"]["max"], "%")), ("Data valid", pct(r["performance"]["paired"])),
     ]
     t = Table([[Paragraph(a, SMALL) for a, _ in stats], [Paragraph(b, BIG) for _, b in stats]], colWidths=[CW / 4] * 4)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), PALE), ("TOPPADDING", (0, 0), (-1, 0), 8), ("BOTTOMPADDING", (0, 1), (-1, 1), 10), ("LEFTPADDING", (0, 0), (-1, -1), 10), ("ROUNDEDCORNERS", [6] * 4)]))
@@ -199,7 +200,9 @@ def build_pdf(r: dict, created_by: str, created_at: datetime) -> bytes:
         story.append(Paragraph("Events filtered to: " + ", ".join(r["severities"]) + ".", SMALL))
 
     s, unit = r["series"], r["protocol"]["activity_unit"]
-    if r["has_data"]:
+    if "charts" not in include:
+        pass
+    elif r["has_data"]:
         ch = s["channels"]
         story += [
             KeepTogether([Paragraph(f"Biological activity ({unit})", H2), LineChart(s["t"], [("Reference", ch["ref_activity"], DEEP), ("Exposed", ch["exp_activity"], EXPOSED)], tz, 118)]),
@@ -212,8 +215,10 @@ def build_pdf(r: dict, created_by: str, created_at: datetime) -> bytes:
     else:
         story.append(Paragraph("No measurements were recorded in this period.", BODY))
 
-    story.append(Paragraph("Inhibition events", H2))
-    if r["events"]:
+    if "events" not in include:
+        pass
+    elif r["events"]:
+        story.append(Paragraph("Inhibition events", H2))
         rows = [["Started", "Severity", "Duration", "Peak", "Associated measurements", "Acknowledged"]]
         for e in r["events"]:
             rows.append([
@@ -223,25 +228,27 @@ def build_pdf(r: dict, created_by: str, created_at: datetime) -> bytes:
         story.append(_table(rows, [CW * w for w in (0.19, 0.2, 0.14, 0.09, 0.22, 0.16)], (2, 3)))
         story.append(Paragraph("Associated measurements changed over the same period. Association does not establish cause.", SMALL))
     else:
-        story.append(Paragraph("No events match this period and filter.", BODY))
+        story += [Paragraph("Inhibition events", H2), Paragraph("No events match this period and filter.", BODY)]
 
-    if r["assessments"]["total"]:
+    if "verdicts" in include and r["assessments"]["total"]:
         rows = [["Assessment result", "Count", "Share"]]
         for a in r["assessments"]["by_severity"]:
             rows.append([a["label"], a["count"], pct(a["count"] / r["assessments"]["total"])])
         story.append(KeepTogether([Paragraph("AI assessments", H2), _table(rows, [CW * 0.4, CW * 0.15, CW * 0.15], (1, 2))]))
 
-    rows = [["Sensor", "Unit", "Min", "Median", "Max", "Coverage", "Invalid", "Missing"]]
-    for x in r["sensors"]:
-        rows.append([x["name"], x["unit"], num(x["min"], "", 2), num(x["median"], "", 2), num(x["max"], "", 2), pct(x["coverage"]), x["invalid"], x["missing"]])
-    story += [Paragraph("Sensor summary", H2), _table(rows, [CW * w for w in (0.3, 0.09, 0.1, 0.11, 0.1, 0.12, 0.09, 0.09)], (2, 3, 4, 5, 6, 7))]
-
     p = r["performance"]
+    if "quality" in include:
+        rows = [["Sensor", "Unit", "Min", "Median", "Max", "Coverage", "Invalid", "Missing"]]
+        for x in r["sensors"]:
+            rows.append([x["name"], x["unit"], num(x["min"], "", 2), num(x["median"], "", 2), num(x["max"], "", 2), pct(x["coverage"]), x["invalid"], x["missing"]])
+        story += [Paragraph("Sensor summary", H2), _table(rows, [CW * w for w in (0.3, 0.09, 0.1, 0.11, 0.1, 0.12, 0.09, 0.09)], (2, 3, 4, 5, 6, 7))]
+        story.append(KeepTogether([
+            Paragraph("Monitoring system performance", H2),
+            Paragraph(
+                f"The station reported in {pct(p['reporting'])} of {p['expected_intervals']} expected {p['interval_minutes']}-minute intervals, and both chambers had "
+                f"valid activity readings in {pct(p['paired'])}. {p['missing']} readings were missing, {p['invalid']} invalid and {p['suspect']} suspect; these are excluded from analysis.", BODY),
+        ]))
     story.append(KeepTogether([
-        Paragraph("Monitoring system performance", H2),
-        Paragraph(
-            f"The station reported in {pct(p['reporting'])} of {p['expected_intervals']} expected {p['interval_minutes']}-minute intervals, and both chambers had "
-            f"valid activity readings in {pct(p['paired'])}. {p['missing']} readings were missing, {p['invalid']} invalid and {p['suspect']} suspect; these are excluded from analysis.", BODY),
         Paragraph("Method and limitations", H2),
         Paragraph(
             f"Protocol: {r['protocol']['name']} v{r['protocol']['version']} ({r['protocol']['validation_status']}). {r['protocol']['validation_reference']}", BODY),

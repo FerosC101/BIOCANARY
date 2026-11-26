@@ -11,6 +11,7 @@ const VALIDATION = { unvalidated: 'Not validated', demonstration: 'Demonstration
 export function MethodPanel({ assessment }: { assessment?: Assessment }) {
   const { station, user } = useApp()
   const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(false)
   const protocol = useQuery({ queryKey: ['station', station.code, 'protocol'], queryFn: () => get<Protocol>(`/stations/${station.code}/protocol`) })
   const model = useQuery({ queryKey: ['model'], queryFn: () => get<ModelCard>('/model'), refetchInterval: false })
   const p = protocol.data
@@ -21,15 +22,21 @@ export function MethodPanel({ assessment }: { assessment?: Assessment }) {
   return (
     <Section
       title="How this is calculated"
+      note={open ? undefined : `${p.name} v${p.version} · anomaly detection against the station's own history${m ? ` · model ${m.version}` : ''}`}
       actions={
-        user.role === 'admin' && (
-          <button className="btn" onClick={() => setEditing(true)}>
-            Edit protocol
+        <div className="section-actions">
+          <button className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? 'Hide details' : 'Show details'}
           </button>
-        )
+          {user.role === 'admin' && open && (
+            <button className="btn" onClick={() => setEditing(true)}>
+              Edit protocol
+            </button>
+          )}
+        </div>
       }
     >
-      <div className="grid-3 method">
+      {open && <div className="grid-3 method">
         <div>
           <h3>Measurement protocol</h3>
           <dl>
@@ -96,7 +103,7 @@ export function MethodPanel({ assessment }: { assessment?: Assessment }) {
             <p className="sub">No trained model is installed. Assessments use statistics and protocol thresholds only.</p>
           )}
         </div>
-      </div>
+      </div>}
       {editing && <EditProtocol p={p} onClose={() => setEditing(false)} />}
     </Section>
   )

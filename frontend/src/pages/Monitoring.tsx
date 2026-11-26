@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { DevicePanel } from '../components/device/DevicePanel'
+import { useEffect, useMemo, useState } from 'react'
+import { DeviceModel } from '../components/device/DeviceModel'
+import type { Lamp, Lamps, View } from '../components/device/scene'
 import { LineChart } from '../components/LineChart'
-import { Dialog, Empty, Failed, Loading, RangePicker, Section } from '../components/ui'
+import { Dialog, Empty, Failed, Loading, Section } from '../components/ui'
+import { Dial } from '../components/Dial'
 import { get, post } from '../lib/api'
 import { useApp, useNow } from '../lib/app'
-import { EXPOSED, INDICATOR, REFERENCE, SUPPORT } from '../lib/colors'
-import { ago, dateTime, digitsFor, exact, num, percent, toLocalInput } from '../lib/format'
+import { ago, dateTime, digitsFor, exact, num, percent, time, toLocalInput } from '../lib/format'
 import { query, type Range } from '../lib/range'
-import type { Connection, DeviceState, ProcessEvent, Protocol, Quality, Reading, SensorState, Series } from '../lib/types'
+import { timeLabels } from '../lib/series'
+import { rangeOf, rangeText, severityWord } from '../lib/ranges'
+import type { Connection, DeviceState, Overview, ProcessEvent, Quality, Reading, SensorState, Series, SystemStatus } from '../lib/types'
 
 const CONNECTION: Record<Connection, string> = {
   ok: 'Reporting',
@@ -27,213 +30,444 @@ interface SensorsView {
   last_reading_at: string | null
 }
 
+const CELLS: Partial<Record<string, number>> = { '6h': 24, '24h': 48, '7d': 56, '30d': 60 }
+const SPANS: { preset: '6h' | '24h' | '7d' | '30d'; label: string }[] = [
+  { preset: '6h', label: '6 h' },
+  { preset: '24h', label: '24 h' },
+  { preset: '7d', label: '7 d' },
+  { preset: '30d', label: '30 d' },
+]
+const WHERE = { reference: 'Ref', exposed: 'Test', environment: 'Sample' }
+const WHAT: Record<string, string> = { biological_activity: 'activity', dissolved_oxygen: 'DO', temperature: 'temp.', ph: 'pH', conductivity: 'conductivity', flow: 'flow' }
+const shortName = (x: SensorState) => `${WHERE[x.location]} ${WHAT[x.quantity] ?? x.quantity}`
+const SHORT: Record<string, string> = { '6h': '6 h', '24h': '24 h', '7d': '7 d', '30d': '30 d' }
+
+interface QualityGrid {
+  cell_minutes: number
+  sensors: { code: string; name: string; location: string; cells: (Quality | 'none')[]; valid: number | null }[]
+}
+
 export function Monitoring() {
   const { station } = useApp()
-  const [range, setRange] = useState<Range>({ preset: '24h' })
+  const [preset, setPreset] = useState<'6h' | '24h' | '7d' | '30d'>('24h')
+  const range: Range = { preset }
   const [hover, setHover] = useState<number | null>(null)
   const [logging, setLogging] = useState(false)
+  const [all, setAll] = useState(false)
   const key = (name: string) => ['station', station.code, name, range]
   const same = <T,>(prev: T | undefined, pq: { queryKey: readonly unknown[] } | undefined) => (pq?.queryKey[1] === station.code ? prev : undefined)
   const series = useQuery({ queryKey: key('series'), queryFn: () => get<Series>(`/stations/${station.code}/series?${query(range)}`), placeholderData: (p, pq) => same(p, pq) })
   const sensors = useQuery({ queryKey: key('sensors'), queryFn: () => get<SensorsView>(`/stations/${station.code}/sensors?${query(range)}`), placeholderData: (p, pq) => same(p, pq) })
   const events = useQuery({ queryKey: key('events'), queryFn: () => get<ProcessEvent[]>(`/stations/${station.code}/events?${query(range)}`), placeholderData: (p, pq) => same(p, pq) })
-  const protocol = useQuery({ queryKey: ['station', station.code, 'protocol'], queryFn: () => get<Protocol>(`/stations/${station.code}/protocol`) })
+  const grid = useQuery({ queryKey: key('quality'), queryFn: () => get<QualityGrid>(`/stations/${station.code}/quality?${query(range, { cells: String(CELLS[preset] ?? 48) })}`), placeholderData: (p, pq) => same(p, pq) })
+  const overview = useQuery({ queryKey: ['station', station.code, 'overview', 24], queryFn: () => get<Overview>(`/stations/${station.code}/overview?hours=24`) })
 
   const s = series.data
-  const marks = (events.data ?? []).map((e) => ({ at: +new Date(e.occurred_at), label: KIND[e.kind] + (e.note ? `: ${e.note}` : '') }))
-  const shared = s ? { t: s.t, hover, onHover: setHover } : null
-  const env = (sensors.data?.sensors ?? []).filter((x) => x.location === 'environment')
-  const formula = protocol.data?.formulas[protocol.data.config.formula]
+  const list = sensors.data?.sensors ?? []
 
   return (
-    <div className="page">
-      <div className="filters">
-        <RangePicker value={range} onChange={setRange} presets={['6h', '24h', '7d', '30d']} />
-        <button className="btn" onClick={() => setLogging(true)}>
-          <Plus size={16} aria-hidden /> Log event
-        </button>
-      </div>
-      <DevicePanel sensors={sensors.data?.sensors ?? []} devices={sensors.data?.devices ?? []} />
-      {series.isError && !s && <Failed error={series.error} retry={() => series.refetch()} />}
-      {!s && !series.isError && <Loading rows={4} />}
-      {s && shared && (
-        <div className={series.isPlaceholderData ? 'stack stale' : 'stack'}>
-          <div className="chambers">
-            <Chamber title="Reference chamber" note="Control population under protected conditions" prefix="ref" color={REFERENCE} location="reference" series={s} sensors={sensors.data?.sensors ?? []} hover={hover} onHover={setHover} />
-            <Chamber title="Exposed chamber" note="Population receiving wastewater sample" prefix="exp" color={EXPOSED} location="exposed" series={s} sensors={sensors.data?.sensors ?? []} hover={hover} onHover={setHover} />
+    <div className="page mon">
+      <ChamberHero sensors={list} unit={s?.activity_unit ?? ''} />
+      <div className="b-row">
+        <section className={'b-card b-channels' + (series.isPlaceholderData ? ' stale' : '')}>
+          <div className="b-head">
+            <h2>Channels</h2>
+            <div className="b-seg" role="group" aria-label="Range">
+              {SPANS.map((x) => (
+                <button key={x.preset} aria-pressed={preset === x.preset} onClick={() => setPreset(x.preset)}>
+                  {x.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <Section title="Biological comparison" note="Both chambers on one scale, with the inhibition indicator below. Diamonds mark logged events.">
-            {s.has_data ? (
-              <>
-                <LineChart
-                  {...shared}
-                  series={[
-                    { key: 'ref', label: 'Reference', color: REFERENCE, values: s.channels.ref_activity },
-                    { key: 'exp', label: 'Exposed', color: EXPOSED, values: s.channels.exp_activity },
-                  ]}
-                  unit={s.activity_unit}
-                  height={250}
-                  gap
-                  minSpan={10}
-                  marks={marks}
-                  label="Reference and exposed biological activity"
-                />
-                <h3 className="chart-title">Inhibition indicator (%)</h3>
-                <LineChart
-                  {...shared}
-                  series={[{ key: 'inh', label: 'Inhibition indicator', color: INDICATOR, values: s.channels.inhibition }]}
-                  unit="%"
-                  height={190}
-                  area
-                  includeZero
-                  minSpan={15}
-                  guides={(['mild', 'moderate', 'severe'] as const).flatMap((k) => (s.thresholds[k] === null ? [] : [{ label: k[0].toUpperCase() + k.slice(1), value: s.thresholds[k] as number }]))}
-                  marks={marks}
-                  label="Inhibition indicator over time"
-                />
-                {formula && (
-                  <p className="formula">
-                    <code>{formula.expression}</code> {formula.note}{' '}
-                    {protocol.data?.validation_status === 'demonstration' && 'Class boundaries are demonstration values, not experimental ones.'}
-                    {protocol.data?.validation_status === 'unvalidated' && 'No class boundaries are shown because none have been validated for this station.'}
-                  </p>
-                )}
-              </>
+          {series.isError && !s && <Failed error={series.error} retry={() => series.refetch()} />}
+          {!s && !series.isError && <Loading rows={4} />}
+          {s && !s.has_data && <Empty title="No valid measurements in this period">{station.origin === 'live' && !station.last_reading_at ? 'This station is waiting for its first hardware reading.' : 'Choose a different period.'}</Empty>}
+          {s && s.has_data && <Lanes s={s} hover={hover} onHover={setHover} events={events.data ?? []} />}
+        </section>
+        <div className="b-side">
+          <InhibitionCard data={overview.data} s={s} />
+          <section className="b-card b-sensors">
+            <h2 className="b-h2">Sensors</h2>
+            {!sensors.data ? (
+              <Loading rows={3} />
             ) : (
-              <Empty title="No valid measurements in this period">{station.origin === 'live' && !station.last_reading_at ? 'This station is waiting for its first hardware reading.' : 'Choose a different date range.'}</Empty>
+              list.map((x) => (
+                <div key={x.code} className="b-sensor" title={x.latest?.reason || undefined}>
+                  <i className={`c-${x.connection}`} />
+                  <span>
+                    {shortName(x)} <span className="st">· {CONNECTION[x.connection].toLowerCase()}</span>
+                  </span>
+                  <span className="n v">
+                    {x.latest?.value != null ? num(x.latest.value, digitsFor(x.quantity)) : '–'}
+                    {x.latest?.value != null && x.unit !== 'pH' ? ` ${x.unit}` : ''}
+                  </span>
+                </div>
+              ))
             )}
-          </Section>
-          <Section title="Supporting measurements" note="Wastewater sample line">
-            {env.length ? (
-              <div className="supports wide">
-                {env.map((x) => (
-                  <div key={x.code} className="support">
-                    <h3>
-                      {x.name.replace('Wastewater ', '').replace(/^[a-oq-z]/, (c) => c.toUpperCase())} <small>{x.quantity === 'ph' ? '' : x.unit}</small>
-                    </h3>
-                    {s.channels[`env_${x.quantity}`]?.some((v) => v !== null) ? (
-                      <LineChart
-                        {...shared}
-                        series={[{ key: x.code, label: x.name, color: SUPPORT, values: s.channels[`env_${x.quantity}`] }]}
-                        unit={x.quantity === 'ph' ? '' : x.unit}
-                        digits={digitsFor(x.quantity)}
-                        height={140}
-                        compact
-                        minSpan={x.quantity === 'ph' ? 0.5 : 1}
-                        label={`${x.name} over time`}
-                      />
-                    ) : (
-                      <p className="sub">No valid readings in this period</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              sensors.isPending && <Loading rows={2} />
-            )}
-          </Section>
+          </section>
         </div>
-      )}
-      <Section title="Sensor connectivity" note="Current state, and data quality over the selected period">
-        {sensors.isError && !sensors.data ? <Failed error={sensors.error} retry={() => sensors.refetch()} /> : sensors.data ? <SensorTable view={sensors.data} /> : <Loading />}
-      </Section>
-      <Readings key={station.code} range={range} sensors={sensors.data?.sensors ?? []} />
-      <Section title="Logged events" note="Sampling, discharge and maintenance, used as context by the AI analysis">
-        {events.data?.length ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Event</th>
-                  <th>Note</th>
-                  <th>Recorded by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.data.map((e) => (
-                  <tr key={e.id}>
-                    <td className="nowrap">{dateTime(e.occurred_at)}</td>
-                    <td>{KIND[e.kind]}</td>
-                    <td>{e.note || '–'}</td>
-                    <td>{e.recorded_by}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      </div>
+      <div className="b-row">
+        <HealthGrid grid={grid.data} span={SHORT[preset]} />
+        <ToCheck range={range} span={SHORT[preset]} all={all} onAll={() => setAll(!all)} />
+      </div>
+      {all && (
+        <>
+          <div className="filters">
+            <button className="btn" onClick={() => setLogging(true)}>
+              <Plus size={16} aria-hidden /> Log event
+            </button>
           </div>
-        ) : events.isPending ? (
-          <Loading rows={2} />
-        ) : (
-          <Empty title="No events logged in this period">Logging discharges and samples lets the analysis relate them to a biological response.</Empty>
-        )}
-      </Section>
+          <Section title="Sensor connectivity" note="Current state, and data quality over the selected period">
+            {sensors.isError && !sensors.data ? <Failed error={sensors.error} retry={() => sensors.refetch()} /> : sensors.data ? <SensorTable view={sensors.data} /> : <Loading />}
+          </Section>
+          <Readings key={station.code} range={range} sensors={list} />
+          <Logged events={events.data} pending={events.isPending} />
+        </>
+      )}
       {logging && <LogEvent onClose={() => setLogging(false)} />}
     </div>
   )
 }
 
-function Chamber(p: {
-  title: string
-  note: string
-  prefix: 'ref' | 'exp'
-  color: string
-  location: 'reference' | 'exposed'
-  series: Series
-  sensors: SensorState[]
-  hover: number | null
-  onHover: (t: number | null) => void
-}) {
-  const own = p.sensors.filter((s) => s.location === p.location)
-  const find = (q: string) => own.find((s) => s.quantity === q)
-  const other = p.prefix === 'ref' ? 'exp' : 'ref'
-  const states = own.map((s) => s.connection)
-  const status = !own.length || states.every((c) => c === 'never') ? 'Awaiting data' : states.every((c) => c === 'offline' || c === 'never') ? 'Offline' : states.every((c) => c === 'ok') ? 'All sensors reporting' : 'Sensor attention needed'
-  const tone = status === 'All sensors reporting' ? 'healthy' : status === 'Sensor attention needed' ? 'warning' : 'offline'
-  const values = p.series.channels[`${p.prefix}_activity`]
-  const doValues = p.series.channels[`${p.prefix}_dissolved_oxygen`]
-  const fig = (q: string, label: string) => {
-    const s = find(q)
-    const ok = s?.latest && (s.connection === 'ok' || s.connection === 'suspect' || s.connection === 'offline')
+/** Reference and test figures either side of the device, as on the board. */
+function ChamberHero({ sensors, unit }: { sensors: SensorState[]; unit: string }) {
+  const { station } = useApp()
+  const system = useQuery({ queryKey: ['system'], queryFn: () => get<SystemStatus>('/system/status') })
+  const [view, setView] = useState<View>('front')
+  const reporting = !!station.last_reading_at && station.status !== 'offline'
+  const mode = system.data?.cloud.mode
+  const wifi: Lamp = reporting ? 'on' : 'off'
+  const cloud: Lamp = mode === 'huawei_connected' ? 'on' : mode === 'huawei_partial' ? 'warning' : 'off'
+  const status: Lamp = station.status === 'healthy' ? 'on' : station.status === 'warning' || station.status === 'critical' ? station.status : 'off'
+  const lamps = useMemo<Lamps>(() => ({ wifi, cloud, status }), [wifi, cloud, status])
+  const side = (location: 'reference' | 'exposed', title: string, cls: string) => {
+    const own = sensors.filter((x) => x.location === location)
+    const val = (q: string) => own.find((x) => x.quantity === q)?.latest?.value ?? null
+    const act = val('biological_activity')
     return (
-      <div>
-        <dt>{label}</dt>
-        <dd>
-          {num(ok ? s.latest!.value : null, digitsFor(q))} <small>{ok && s.unit}</small>
-        </dd>
+      <div className={`b-chamber ${cls}`}>
+        <span className="label">{title}</span>
+        <span className="value n">
+          {num(act)}
+          {act !== null && <small> {unit}</small>}
+        </span>
+        <span className="sub n">
+          DO {num(val('dissolved_oxygen'), 2)} mg/L · {num(val('temperature'))} °C · {own.filter((x) => x.connection === 'ok').length} / {own.length} sensors
+        </span>
       </div>
     )
   }
   return (
-    <Section
-      className="chamber"
-      title={
-        <>
-          <i className="key" style={{ background: p.color }} />
-          {p.title}
-        </>
-      }
-      note={p.note}
-      actions={<span className={`badge s-${tone}`}>{status}</span>}
-    >
-      <dl className="figures">
-        {fig('biological_activity', 'Activity')}
-        {fig('dissolved_oxygen', 'Dissolved oxygen')}
-        {fig('temperature', 'Temperature')}
-      </dl>
-      {values?.some((v) => v !== null) ? (
-        <>
-          <h3 className="chart-title">Biological activity ({p.series.activity_unit})</h3>
-          <LineChart t={p.series.t} hover={p.hover} onHover={p.onHover} series={[{ key: 'a', label: 'Activity', color: p.color, values }]} unit={p.series.activity_unit} height={150} compact minSpan={10} alsoFit={[p.series.channels[`${other}_activity`] ?? []]} label={`${p.title} activity`} />
-          {doValues && (
-            <>
-              <h3 className="chart-title">Dissolved oxygen (mg/L)</h3>
-              <LineChart t={p.series.t} hover={p.hover} onHover={p.onHover} series={[{ key: 'd', label: 'Dissolved oxygen', color: p.color, values: doValues }]} unit="mg/L" digits={2} height={120} compact minSpan={1} alsoFit={[p.series.channels[`${other}_dissolved_oxygen`] ?? []]} label={`${p.title} dissolved oxygen`} />
-            </>
-          )}
-        </>
+    <section className="b-hero" aria-label="Chambers">
+      {side('reference', 'REFERENCE CHAMBER', 'ref')}
+      <figure className="b-device">
+        <DeviceModel
+          dark
+          fill
+          lamps={lamps}
+          active={reporting}
+          view={view}
+          label={`3D model of the BIOCANARY device: a blue reference chamber and a green test chamber.${station.origin === 'simulated' ? ' This station is simulated, so no physical unit is connected.' : ''}`}
+          markers={[
+            { part: 'reference', label: 'Reference chamber' },
+            { part: 'test', label: 'Test chamber' },
+          ]}
+          selected={view === 'reference' || view === 'test' ? view : null}
+          onSelect={(p) => setView(view === p ? 'front' : p)}
+        />
+        <figcaption>Drag to turn · lighting identifies the chambers, not their health</figcaption>
+      </figure>
+      {side('exposed', 'TEST CHAMBER', 'test')}
+    </section>
+  )
+}
+
+interface LaneDef {
+  key: string
+  name: string
+  unit: string
+  digits: number
+  minSpan: number
+  lines: { key: string; label: string; color: string; values: (number | null)[] }[]
+  gap?: boolean
+  area?: boolean
+  includeZero?: boolean
+  guides?: { label: string; value: number }[]
+}
+
+const EVENT_COLOR: Record<string, string> = { sampling: '#8FB6FF', discharge: '#FFB547', maintenance: '#C6B8FF', other: '#9FB4DA' }
+
+/** Channels on one shared time axis, then the events row and the time labels, as on the board. */
+function Lanes({ s, hover, onHover, events }: { s: Series; hover: number | null; onHover: (t: number | null) => void; events: ProcessEvent[] }) {
+  const c = s.channels
+  const t0 = s.t[0]
+  const t1 = s.t[s.t.length - 1]
+  const marks = events.map((e) => ({ at: +new Date(e.occurred_at), label: KIND[e.kind] + (e.note ? `: ${e.note}` : '') }))
+  const lanes: LaneDef[] = [
+    {
+      key: 'act',
+      name: 'Activity',
+      unit: `${s.activity_unit}, ref / test`,
+      digits: 1,
+      minSpan: 10,
+      gap: true,
+      lines: [
+        { key: 'ref', label: 'Reference', color: '#8FB6FF', values: c.ref_activity ?? [] },
+        { key: 'exp', label: 'Test', color: '#7CF09A', values: c.exp_activity ?? [] },
+      ],
+    },
+    {
+      key: 'do',
+      name: 'Dissolved O₂',
+      unit: 'mg/L, ref / test',
+      digits: 2,
+      minSpan: 1,
+      lines: [
+        { key: 'rdo', label: 'Reference', color: '#8FB6FF', values: c.ref_dissolved_oxygen ?? [] },
+        { key: 'edo', label: 'Test', color: '#7CF09A', values: c.exp_dissolved_oxygen ?? [] },
+      ],
+    },
+    {
+      key: 'inh',
+      name: 'Inhibition',
+      unit: s.thresholds.moderate !== null ? `%, moderate at ${s.thresholds.moderate}` : '%',
+      digits: 1,
+      minSpan: 15,
+      area: true,
+      includeZero: true,
+      guides: s.thresholds.moderate !== null ? [{ label: 'Moderate', value: s.thresholds.moderate }] : [],
+      lines: [{ key: 'inh', label: 'Inhibition', color: '#FFB547', values: c.inhibition ?? [] }],
+    },
+    { key: 'ph', name: 'Sample pH', unit: 'pH', digits: 2, minSpan: 0.5, lines: [{ key: 'ph', label: 'Sample pH', color: '#C6B8FF', values: c.env_ph ?? [] }] },
+    { key: 'cond', name: 'Conductivity', unit: 'µS/cm', digits: 0, minSpan: 40, lines: [{ key: 'cond', label: 'Conductivity', color: '#C6B8FF', values: c.env_conductivity ?? [] }] },
+  ].filter((l) => l.lines.some((x) => x.values.some((v) => v !== null)))
+  const at = (v: (number | null)[]) => {
+    if (hover !== null) {
+      let best = 0
+      for (let i = 1; i < s.t.length; i++) if (Math.abs(s.t[i] - hover) < Math.abs(s.t[best] - hover)) best = i
+      return v[best]
+    }
+    for (let i = v.length - 1; i >= 0; i--) if (v[i] !== null) return v[i]
+    return null
+  }
+  const x = (ms: number) => `${(((ms - t0) / Math.max(1, t1 - t0)) * 100).toFixed(2)}%`
+  return (
+    <>
+      {lanes.map((l) => (
+        <div key={l.key} className="b-lane">
+          <div>
+            <div className="nm">{l.name}</div>
+            <div className="un">{l.unit}</div>
+          </div>
+          <LineChart
+            t={s.t}
+            hover={hover}
+            onHover={onHover}
+            series={l.lines}
+            unit={l.unit.split(',')[0]}
+            digits={l.digits}
+            height={l.lines.length > 1 ? 82 : 66}
+            compact
+            minimal
+            legend={false}
+            xAxis={false}
+            yLabels={false}
+            pad={{ l: 2, r: 2 }}
+            gap={l.gap}
+            area={l.area}
+            includeZero={l.includeZero}
+            guides={l.guides}
+            minSpan={l.minSpan}
+            marks={marks}
+            label={`${l.name} over time`}
+          />
+          <div className="vals n">
+            {l.lines.map((ln) => (
+              <div key={ln.key} style={{ color: ln.color }}>
+                {num(at(ln.values), l.digits)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="b-lane events">
+        <span className="nm">Events</span>
+        <div className="evs">
+          {events
+            .filter((e) => +new Date(e.occurred_at) >= t0 && +new Date(e.occurred_at) <= t1)
+            .slice(0, 8)
+            .map((e) => (
+              <div key={e.id} className="ev" style={{ left: x(+new Date(e.occurred_at)) }} title={`${KIND[e.kind]} ${dateTime(e.occurred_at)}${e.note ? `: ${e.note}` : ''}`}>
+                <i style={{ background: EVENT_COLOR[e.kind], boxShadow: `0 0 10px ${EVENT_COLOR[e.kind]}` }} />
+                <span>{KIND[e.kind]}</span>
+              </div>
+            ))}
+          {!events.length && <span className="none">None logged</span>}
+        </div>
+        <span className="n cur">{hover !== null ? `cursor ${time(hover)}` : ''}</span>
+      </div>
+      <div className="b-lane times n">
+        <span />
+        <span className="row">
+          {timeLabels(s.t).map((l, i) => (
+            <span key={i}>{l}</span>
+          ))}
+        </span>
+        <span />
+      </div>
+    </>
+  )
+}
+
+function InhibitionCard({ data, s }: { data?: Overview; s?: Series }) {
+  const a = data?.assessment
+  const offline = data?.station.status === 'offline'
+  const t = a?.detail.threshold.used ? a.detail.threshold.values : null
+  const value = offline ? null : (a?.inhibition ?? null)
+  const zone = rangeOf(value, t)
+  const ink = zone === null ? '#C6D2EA' : ['#9FF5B4', '#E6F07A', '#FFD08A', '#FF8A80'][zone]
+  const vals = (s?.channels.inhibition ?? []).filter((v): v is number => v !== null)
+  const peak = vals.length ? Math.max(...vals) : null
+  return (
+    <section className="b-card b-inh" aria-label="Inhibition">
+      <Dial value={value} thresholds={t} size={120} muted={offline || !a} label={`Inhibition ${value === null ? 'not available' : `${num(value)} percent`}`} />
+      <div>
+        <div className="ttl">Inhibition</div>
+        <div className="rng" style={{ color: ink }}>
+          {offline ? 'Station offline' : a ? rangeText(value, t, severityWord(a.severity)) : 'Not assessed yet'}
+        </div>
+        <div className="sub n">
+          {a?.detail.onset && zone !== null && zone > 0 ? `since ${time(a.detail.onset)} · ` : ''}
+          {peak !== null ? `peak ${num(peak)}%` : ''}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+const Q_LABEL: Record<Quality | 'none', string> = { valid: 'Valid', suspect: 'Suspect', missing: 'Missing', invalid: 'Invalid', none: 'No reading' }
+
+function HealthGrid({ grid, span }: { grid?: QualityGrid; span: string }) {
+  const rows = grid?.sensors ?? []
+  const fractions = rows.map((r) => r.valid).filter((v): v is number => v !== null)
+  const valid = fractions.length ? fractions.reduce((a, b) => a + b, 0) / fractions.length : null
+  const cell = grid ? (grid.cell_minutes >= 60 ? `${Math.round(grid.cell_minutes / 60)}-hour` : `${grid.cell_minutes}-min`) : ''
+  return (
+    <section className="b-card b-health">
+      <div className="b-head">
+        <h2>Sensor health · {span}</h2>
+        {grid && (
+          <span className="aside">
+            {cell} cells{valid !== null ? ` · ${percent(valid)} valid` : ''}
+          </span>
+        )}
+      </div>
+      {!grid ? (
+        <Loading rows={3} />
       ) : (
-        <Empty title="No activity measured in this period" />
+        <>
+          {rows.map((r) => (
+            <div key={r.code} className="hrow">
+              <span className="hn">{r.name.replace('Wastewater', 'Sample')}</span>
+              <div className="hc" style={{ gridTemplateColumns: `repeat(${r.cells.length}, minmax(0, 1fr))` }}>
+                {r.cells.map((q, i) => (
+                  <i key={i} className={`q-${q}`} title={Q_LABEL[q]} />
+                ))}
+              </div>
+              <span className="n hp">{r.valid === null ? '–' : percent(r.valid, 0)}</span>
+            </div>
+          ))}
+          <div className="hkey">
+            {(['valid', 'suspect', 'missing', 'invalid'] as const).map((q) => (
+              <span key={q}>
+                <i className={`q-${q}`} />
+                {Q_LABEL[q]}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+const Q_COLOR: Record<string, string> = { suspect: '#FFB547', invalid: '#FF6B5E', missing: '#9FB4DA', valid: '#7CF09A' }
+
+function ToCheck({ range, span, all, onAll }: { range: Range; span: string; all: boolean; onAll: () => void }) {
+  const { station } = useApp()
+  const q = useQuery({
+    queryKey: ['station', station.code, 'readings', range, 'problem'],
+    queryFn: () => get<{ total: number; rows: Reading[] }>(`/stations/${station.code}/readings?${query(range, { quality: 'problem', size: '5' })}`),
+  })
+  return (
+    <section className="b-card b-check">
+      <div className="b-head">
+        <h2>Readings to check</h2>
+        {q.data && (
+          <span className="aside">
+            {q.data.total.toLocaleString('en-GB')} in {span}
+          </span>
+        )}
+      </div>
+      {!q.data ? (
+        <Loading rows={3} />
+      ) : !q.data.rows.length ? (
+        <p className="b-quiet">Every reading in this period is valid.</p>
+      ) : (
+        q.data.rows.map((r) => (
+          <div key={r.id} className="crow">
+            <i style={{ background: Q_COLOR[r.quality], boxShadow: `0 0 8px ${Q_COLOR[r.quality]}` }} />
+            <div>
+              <b>{r.name.replace('Wastewater', 'Sample')}</b> <span style={{ color: Q_COLOR[r.quality], fontWeight: 600 }}>{r.quality}</span>
+              <div className="rs">{r.reason || 'No value reported'}</div>
+            </div>
+            <span className="n cv">
+              {r.value === null ? '–' : `${num(r.value, 2)} ${r.unit === 'pH' ? '' : r.unit}`}
+              <br />
+              <small>{time(r.recorded_at)}</small>
+            </span>
+          </div>
+        ))
+      )}
+      <button className="link b-more" aria-expanded={all} onClick={onAll}>
+        {all ? 'Hide all readings and events' : 'All readings and events →'}
+      </button>
+    </section>
+  )
+}
+
+function Logged({ events, pending }: { events?: ProcessEvent[]; pending: boolean }) {
+  return (
+    <Section title="Logged events" note="Sampling, discharge and maintenance, used as context by the AI analysis">
+      {events?.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>Note</th>
+                <th>Recorded by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((e) => (
+                <tr key={e.id}>
+                  <td className="nowrap">{dateTime(e.occurred_at)}</td>
+                  <td>{KIND[e.kind]}</td>
+                  <td>{e.note || '–'}</td>
+                  <td>{e.recorded_by}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : pending ? (
+        <Loading rows={2} />
+      ) : (
+        <Empty title="No events logged in this period">Logging discharges and samples lets the analysis relate them to a biological response.</Empty>
       )}
     </Section>
   )

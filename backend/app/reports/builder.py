@@ -120,8 +120,11 @@ def build_report(db: Session, station: Station, start: datetime, end: datetime, 
     }
 
 
-def build_csv(db: Session, station: Station, start: datetime, end: datetime, severities: list[str]) -> bytes:
-    """One row per 10-minute interval. With a severity filter, only intervals inside matching events."""
+def build_csv(db: Session, station: Station, start: datetime, end: datetime, severities: list[str], raw: bool = False) -> bytes:
+    """One row per 10-minute interval, or with `raw` one row per individual reading including its quality.
+    With a severity filter, only rows inside matching events."""
+    if raw:
+        return _raw_csv(db, station, start, end, severities)
     frame = load_frame(db, station, start, end)
     cfg = merged(station.protocol.config)
     assess = pd.DataFrame(
@@ -148,3 +151,24 @@ def build_csv(db: Session, station: Station, start: datetime, end: datetime, sev
         inh = cell(a["inhibition"])
         w.writerow([ts.isoformat(), station.code, station.origin, *values, round(inh, 2) if inh != "" else "", *(("" if pd.isna(a[k]) else a[k]) for k in ("severity", "confidence", "protocol", "model"))])
     return ("﻿" + out.getvalue()).encode()
+
+
+def _raw_csv(db: Session, station: Station, start: datetime, end: datetime, severities: list[str]) -> bytes:
+    from ..models import Measurement, Sensor
+
+    spans = [(pd.Timestamp(e["started_at"]), pd.Timestamp(e["ended_at"] or end)) for e in _events(db, station, start, end, severities)] if severities else None
+    rows = db.execute(
+        select(Measurement.recorded_at, Sensor.code, Sensor.location, Sensor.quantity, Sensor.unit, Measurement.value, Measurement.quality, Measurement.quality_reason)
+        .join(Sensor, Sensor.id == Measurement.sensor_id)
+        .where(Measurement.station_id == station.id, Measurement.recorded_at >= start, Measurement.recorded_at <= end)
+        .order_by(Measurement.recorded_at, Sensor.id)
+    ).all()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["recorded_utc", "station", "data_origin", "sensor", "location", "quantity", "unit", "value", "quality", "quality_reason"])
+    for at, code, location, quantity, unit, value, quality, reason in rows:
+        ts = pd.Timestamp(at).tz_localize("UTC") if pd.Timestamp(at).tzinfo is None else pd.Timestamp(at)
+        if spans is not None and not any(a <= ts <= b for a, b in spans):
+            continue
+        w.writerow([ts.isoformat(), station.code, station.origin, code, location, quantity, unit, "" if value is None else value, quality, reason])
+    return ("\ufeff" + out.getvalue()).encode()

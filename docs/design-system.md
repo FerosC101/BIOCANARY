@@ -6,7 +6,7 @@ The vector in `frontend/src/brand/logoPaths.ts` is traced from `docs/brand/refer
 
 ## Style: bioluminescent
 
-A deep-navy night surface (#04122C) with soft blue and green glows, glowing numbers and chart lines, and quiet translucent glass panels. Navigation is five text tabs in a top bar with a glowing lime underline on the active one; on phones the tabs become a fixed bar at the bottom. Tokens are in `frontend/src/index.css` (`:root`).
+A deep-navy night surface (#04122C) with soft blue and green glows, glowing numbers and chart lines, and quiet translucent glass panels. Pages follow the canvas boards (DashboardBio, MonitoringBio, AnalysisBio, ReportsBio, WallBio) one to one: the nav sits inside the 1300 px page column with five text tabs and a glowing lime underline, faint rings behind the header, and on the right only what each board shows (Dashboard: live freshness; Monitoring and Facility: station picker; AI Analysis: station and assessment time), then the data-source tag and the account menu (infrastructure status, wall display, sign-out). On phones the tabs become a fixed bar at the bottom. Tokens are in `frontend/src/index.css` (`:root`).
 
 | Token | Hex | Use |
 |---|---|---|
@@ -29,7 +29,7 @@ Inhibition is shown on a 270° dial (`components/Dial.tsx`). The protocol's rang
 
 ## Wall display
 
-`/wall` (`frontend/src/pages/Wall.tsx`) is a full-screen control-room view for a TV: one tile per station with its dial, range in words, 24 h of both chambers, and a footer with open alerts. It is not a navigation section; the TV button in the top bar opens it, and the ✕ in its header (shown on hover) leaves it. It fits a 1080p screen without scrolling and updates from the same live stream. Offline stations show a dimmed last-known trace and when they last reported; simulated data is tagged in the header.
+`/wall` (`frontend/src/pages/Wall.tsx`) is a full-screen control-room view for a TV: one tile per station with its dial, range in words, 24 h of both chambers, and a footer with open alerts. It is not a navigation section; "Wall display" in the account menu (the avatar at top right) opens it, and the ✕ in its header (shown on hover) leaves it. It fits a 1080p screen without scrolling and updates from the same live stream. Offline stations show a dimmed last-known trace and when they last reported; simulated data is tagged in the header.
 
 ## Facility (3D monitoring)
 

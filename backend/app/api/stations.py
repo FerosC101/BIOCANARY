@@ -113,6 +113,43 @@ def readings(
     }
 
 
+_WORST = {"valid": 0, "suspect": 1, "missing": 2, "invalid": 3}
+
+
+@router.get("/stations/{code}/quality")
+def quality_grid(station: StationDep, db: Db, period: PeriodDep, cells: int = Query(48, ge=4, le=200)):
+    """Data quality per sensor in equal time cells. Each cell shows the worst quality recorded in it,
+    so a single problem stays visible; "none" means no reading arrived."""
+    span = (period.end - period.start) / cells
+    sensors = db.scalars(select(Sensor).where(Sensor.station_id == station.id).order_by(Sensor.id)).all()
+    grid = {s.id: [None] * cells for s in sensors}
+    totals = {s.id: [0, 0] for s in sensors}  # valid, all
+    rows = db.execute(
+        select(Measurement.sensor_id, Measurement.recorded_at, Measurement.quality)
+        .where(Measurement.station_id == station.id, Measurement.recorded_at >= period.start, Measurement.recorded_at < period.end)
+    ).all()
+    for sid, at, q in rows:
+        if sid not in grid:
+            continue
+        i = min(cells - 1, int((aware(at) - period.start) / span))
+        cur = grid[sid][i]
+        if cur is None or _WORST[q] > _WORST[cur]:
+            grid[sid][i] = q
+        totals[sid][1] += 1
+        totals[sid][0] += q == "valid"
+    return {
+        "start": period.start, "end": period.end, "cell_minutes": round(span.total_seconds() / 60),
+        "sensors": [
+            {
+                "code": s.code, "name": s.name, "location": s.location,
+                "cells": [c or "none" for c in grid[s.id]],
+                "valid": totals[s.id][0] / totals[s.id][1] if totals[s.id][1] else None,
+            }
+            for s in sensors
+        ],
+    }
+
+
 @router.get("/stations/{code}/events")
 def list_events(station: StationDep, db: Db, period: PeriodDep):
     rows = db.scalars(
