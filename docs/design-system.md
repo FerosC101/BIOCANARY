@@ -6,7 +6,7 @@ The vector in `frontend/src/brand/logoPaths.ts` is traced from `docs/brand/refer
 
 ## Style: bioluminescent
 
-A deep-navy night surface (#04122C) with soft blue and green glows, glowing numbers and chart lines, and quiet translucent glass panels. Navigation is four text tabs in a top bar with a glowing lime underline on the active one; on phones the tabs become a fixed bar at the bottom. Tokens are in `frontend/src/index.css` (`:root`).
+A deep-navy night surface (#04122C) with soft blue and green glows, glowing numbers and chart lines, and quiet translucent glass panels. Navigation is five text tabs in a top bar with a glowing lime underline on the active one; on phones the tabs become a fixed bar at the bottom. Tokens are in `frontend/src/index.css` (`:root`).
 
 | Token | Hex | Use |
 |---|---|---|
@@ -26,6 +26,23 @@ Inhibition is shown on a 270° dial (`components/Dial.tsx`). The protocol's rang
 - No pills, warning flags or segmented severity bars. Level reads from position on the arc plus a word, never colour alone.
 - Ranges appear only when validated thresholds apply. Otherwise the ring is grey and the caption says "Unclassified"; offline stations show a dimmed last-known value.
 - Amber and red mean range only, never a data series.
+
+## Wall display
+
+`/wall` (`frontend/src/pages/Wall.tsx`) is a full-screen control-room view for a TV: one tile per station with its dial, range in words, 24 h of both chambers, and a footer with open alerts. It is not a navigation section; the TV button in the top bar opens it, and the ✕ in its header (shown on hover) leaves it. It fits a 1080p screen without scrolling and updates from the same live stream. Offline stations show a dimmed last-known trace and when they last reported; simulated data is tagged in the header.
+
+## Facility (3D monitoring)
+
+The Facility tab (`frontend/src/pages/Facility.tsx`) shows the whole plant in 3D with every station at its place: pins with the range arc and inhibition, unit lamps in the station's status colour, pulsing rings where a station is in a warning or critical state, and live sample and upload flows from reporting units only. Selecting a station (pin, list or the view switch) flies the camera to its unit and shows its dial, chamber readings and links to Dashboard, Monitoring and AI Analysis. The side panel summarises how many stations report, open alerts and the highest inhibition. It shares the scene and pins with the explainer (`components/plant/PlantCanvas.tsx`).
+
+## Plant explainer
+
+`/plant` (`frontend/src/pages/Plant.tsx`, scene in `components/plant/plantScene.ts`) is a full-screen 3D illustration of a treatment plant with a seven-step tour of how BIOCANARY works: inflow, sampling, the two chambers, divergence, analysis, and the alert to the control room. It opens from "See them on the plant" above the Dashboard station cards and from the Facility tab; it is not a navigation section itself.
+
+- The plant is built procedurally in three.js (no model or image files): textures for grass, fields, concrete, asphalt, water ripples, corrugated roofing, steel panels, facades and foliage are drawn on canvases at load (`components/plant/textures.ts`). Lighting is a physical late-afternoon sky with sun shadows and sky reflections. Its layout is illustrative and the page says so.
+- Stations are placed by name (influent, equalisation, industrial; live hardware at the control room). Their lamps, pins and sample/upload flows follow live status; an offline unit is dark and sends nothing.
+- The analysis step names where analysis actually runs, from the system status; it never shows Huawei Cloud unless that is the verified mode.
+- Reduced motion stops flows and bridge rotation and makes camera moves instant. Without WebGL the steps remain as text.
 
 ## Type
 

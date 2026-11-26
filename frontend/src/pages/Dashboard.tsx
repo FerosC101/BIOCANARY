@@ -19,6 +19,23 @@ const SPANS = [
   [168, '7 d'],
 ] as const
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function Dashboard() {
   const { station } = useApp()
   const [hours, setHours] = useState<number>(24)
@@ -147,10 +164,16 @@ function AiNote({ a, offline }: { a: Assessment; offline: boolean }) {
 function Fleet() {
   const { stations, station, selectStation } = useApp()
   return (
-    <section className="fleet" aria-label="All stations">
-      {stations.map((s) => (
-        <StationCard key={s.code} s={s} current={s.code === station.code} onPick={() => selectStation(s.code)} />
-      ))}
+    <section aria-label="All stations">
+      <div className="fleet-head">
+        <h2>Stations</h2>
+        <Link to="/plant">See them on the plant · how it works →</Link>
+      </div>
+      <div className="fleet">
+        {stations.map((s) => (
+          <StationCard key={s.code} s={s} current={s.code === station.code} onPick={() => selectStation(s.code)} />
+        ))}
+      </div>
     </section>
   )
 }

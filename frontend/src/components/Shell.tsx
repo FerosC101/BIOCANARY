@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, LogOut } from 'lucide-react'
+import { ChevronDown, LogOut, Tv } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
 import { get, post } from '../lib/api'
 import { useApp, useNow } from '../lib/app'
@@ -11,6 +11,7 @@ import { OriginTag, StatusIcon, useDismiss } from './ui'
 
 const NAV = [
   { to: '/', label: 'Dashboard' },
+  { to: '/facility', label: 'Facility' },
   { to: '/monitoring', label: 'Monitoring' },
   { to: '/analysis', label: 'AI Analysis' },
   { to: '/reports', label: 'Reports' },
@@ -47,6 +48,9 @@ export function Shell() {
             {station.last_reading_at ? ago(station.last_reading_at, now) : 'No readings yet'}
           </span>
           <SystemMenu />
+          <Link className="wall-link" to="/wall" title="Wall display: every station on one screen" aria-label="Open the wall display">
+            <Tv size={18} aria-hidden />
+          </Link>
           <div className="who">
             <div>
               <b>{user.name}</b>

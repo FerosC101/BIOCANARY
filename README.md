@@ -46,7 +46,7 @@ browser ◀── REST + server-sent events ── API on ECS ──▶ OBS (raw
 | `backend/app/cloud` | Adapters for RDS, Redis/DCS, OBS, ModelArts and live connection probes |
 | `backend/app/simulation` | Simulator engine, demo data, simulated device client |
 | `backend/app/reports` | Report summary, PDF, CSV |
-| `frontend/src` | React application: Dashboard, Monitoring, AI Analysis, Reports |
+| `frontend/src` | React application: Dashboard, Facility (3D plant), Monitoring, AI Analysis, Reports |
 | `device3d` | Blender model of the device, its build scripts and renders |
 | `ml` | Dataset builder, MindSpore training, ModelArts inference container |
 | `deploy` | Docker Compose, nginx and environment template for ECS |

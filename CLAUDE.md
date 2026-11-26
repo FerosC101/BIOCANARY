@@ -11,15 +11,15 @@ Wastewater early-warning platform: compares a reference microbial culture with o
 
 ## Layout
 - `backend/app`: FastAPI, SQLAlchemy, Alembic. `ingest/` device API, `analysis/` pipeline, `cloud/` Huawei adapters (RDS, DCS, OBS, ModelArts), `simulation/`, `reports/`, `cli.py` operations.
-- `frontend/src`: React 19 + Vite + TanStack Query, plain CSS in `index.css`. Pages: Dashboard, Monitoring, AI Analysis, Reports.
-- UI style is "bioluminescent": dark night surface, glowing lines, glass panels, top text tabs. Severity is shown with the dial (`components/Dial.tsx`) or `RangeGlyph` + a word; ranges helpers in `lib/ranges.ts`. No pills or warning flags. See `docs/design-system.md`.
+- `frontend/src`: React 19 + Vite + TanStack Query, plain CSS in `index.css`. Pages: Dashboard, Facility (3D plant with live stations), Monitoring, AI Analysis, Reports.
+- UI style is "bioluminescent": dark night surface, glowing lines, glass panels, top text tabs. Severity is shown with the dial (`components/Dial.tsx`) or `RangeGlyph` + a word; ranges helpers in `lib/ranges.ts`. No pills or warning flags. `/wall` (control-room TV view, TV button in top bar) and `/plant` (3D plant explainer, link above the Dashboard station cards) are full-screen views outside the five sections. See `docs/design-system.md`.
 - `frontend/src/components/device`: three.js viewer (`scene.ts`) and panels; loads `public/device/device.glb` and `device.webp`.
 - `ml/`: MindSpore training, exported JSON weights in `ml/artifacts`.
 - `device3d/`: Blender model. `build_device.py` rebuilds the `.blend`; `export_web.py` + `optimize_web.mjs` make the web GLB. Commands in `device3d/README.md`. Blender is at `/Applications/Blender.app/Contents/MacOS/Blender`; the first GPU render compiles kernels for about 10 minutes.
 - `docs/`: architecture, hardware API, AI method, Huawei deployment, design system.
 
 ## Rules (product decisions, do not break)
-- Exactly four nav sections: Dashboard, Monitoring, AI Analysis, Reports.
+- Exactly five nav sections: Dashboard, Facility, Monitoring, AI Analysis, Reports.
 - Label simulated data everywhere. Never show a Huawei service as connected without a live probe. Never silently fall back from ModelArts.
 - Hardware data gets no severity or confidence without a validated protocol or experimental model ("Unclassified").
 - Correlation is not cause. Never call water safe or unsafe. Blue/green lighting is decoration, not microbial health.

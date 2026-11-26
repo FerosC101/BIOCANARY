@@ -9,9 +9,12 @@ import { AppProvider, useStations } from './lib/app'
 import type { User } from './lib/types'
 import { Analysis } from './pages/Analysis'
 import { Dashboard } from './pages/Dashboard'
+import { Facility } from './pages/Facility'
 import { Login } from './pages/Login'
 import { Monitoring } from './pages/Monitoring'
+import { Plant } from './pages/Plant'
 import { Reports } from './pages/Reports'
+import { Wall } from './pages/Wall'
 
 export function App() {
   const qc = useQueryClient()
@@ -47,8 +50,12 @@ export function App() {
   return (
     <AppProvider user={me.data} stations={stations.data}>
       <Routes>
+        {/* Full-screen views (control-room wall, plant explainer); deliberately outside the shell and its five sections. */}
+        <Route path="wall" element={<Wall />} />
+        <Route path="plant" element={<Plant />} />
         <Route element={<Shell />}>
           <Route index element={<Dashboard />} />
+          <Route path="facility" element={<Facility />} />
           <Route path="monitoring" element={<Monitoring />} />
           <Route path="analysis" element={<Analysis />} />
           <Route path="reports" element={<Reports />} />
